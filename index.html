@@ -49,9 +49,16 @@
       <section id="scene">
         <div id="scene-bg"></div>
         <div id="staff-layer"></div>
+        <div id="tv" role="button" tabindex="0" title="TV của quán — bấm để đổi nhạc">
+          <div class="tv-screen"><div id="yt-holder"><div id="yt-player"></div></div>
+            <div id="tv-idle"><span class="eq"><i></i><i></i><i></i><i></i><i></i></span><span id="tv-label">🎷 Jazz</span></div></div>
+          <div class="tv-stand"></div>
+        </div>
         <div id="counter"></div>
         <div id="customers"></div>
         <div id="floaters"></div>
+        <div id="qte-layer"></div>
+        <div id="tamsu-banner"></div>
         <div id="coach" class="hidden"></div>
         <div id="closed-sign" class="hidden">🔒 Đã đóng cửa</div>
         <div id="dialog" class="hidden">
@@ -73,7 +80,8 @@
           <button data-panel="decor"><span>🪴</span>Trang trí</button>
           <button data-panel="ads"><span>📣</span>Quảng cáo</button>
           <button data-panel="chain"><span>🏪</span>Chuỗi quán</button>
-          <button data-panel="album"><span>💞</span>Khách quen</button>
+          <button data-panel="album"><span>💞</span>Khách ruột</button>
+          <button data-panel="collect"><span>📚</span>Sưu tập</button>
           <button data-panel="report"><span>📊</span>Sổ sách</button>
           <button data-panel="achv"><span>🏆</span>Thành tựu</button>
           <button data-panel="settings"><span>⚙️</span>Lưu & Cài đặt</button>
@@ -124,6 +132,7 @@
   </div>
 
   <script src="js/data.js"></script>
+  <script src="js/stories.js"></script>
   <script src="js/art.js"></script>
   <script src="js/audio.js"></script>
   <script src="js/game.js"></script>

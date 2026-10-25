@@ -53,7 +53,7 @@ const DRINKS = {
   latte:        { name: "Latte",             price: 55000, recipe: ["espresso", "sua_tuoi", "foam"], hot: true, equip: "may_espresso" },
   cappuccino:   { name: "Cappuccino",        price: 55000, recipe: ["espresso", "foam", "cacao"], hot: true, equip: "may_espresso" },
   matcha_latte: { name: "Matcha latte đá",   price: 55000, recipe: ["matcha", "sua_tuoi", "da"], hot: false, equip: "may_espresso" },
-  // Công thức bí mật — mở khóa qua câu chuyện khách quen
+  // Công thức bí mật — mở khóa qua câu chuyện khách ruột
   jazz_latte:   { name: "Latte Jazz Đêm",    price: 65000, recipe: ["espresso", "sua_dac", "sua_tuoi", "foam", "cacao"], hot: true, equip: "may_espresso", secret: true },
   cf_cu_hoa:    { name: "Cà phê Cụ Hòa",     price: 60000, recipe: ["phin", "trung", "cacao"], hot: true, equip: "may_danh_trung", secret: true },
   tra_dau:      { name: "Trà dâu Đà Lạt",    price: 55000, recipe: ["tra", "dau", "duong", "da"], hot: false, secret: true },
@@ -82,7 +82,7 @@ const DECOR = {
 // ---------- Địa điểm ----------
 const LOCATIONS = {
   hanoi:  { name: "Hẻm Phố Cổ", city: "Hà Nội",  cost: 0,        rent: 150000, flow: 1.0, specialty: "ca_phe_trung", key: 5,  tempo: 92,
-            wall: "#ffe6b8", accent: "#e07a5f", desc: "Căn nhà nhỏ ngoại để lại, cửa sổ nhìn ra mái ngói rêu phong." },
+            wall: "#ffe6b8", accent: "#e07a5f", desc: "Căn quán nhỏ ngoại nhượng lại, cửa sổ nhìn ra mái ngói rêu phong." },
   saigon: { name: "Góc Quận 1", city: "Sài Gòn", cost: 8000000,  rent: 320000, flow: 1.45, specialty: "bac_xiu", key: 10, tempo: 108,
             wall: "#d9f2ef", accent: "#2a9d8f", desc: "Sôi động, đông khách văn phòng, thèm đồ đá quanh năm." },
   dalat:  { name: "Đồi Thông", city: "Đà Lạt",   cost: 14000000, rent: 200000, flow: 1.15, specialty: "ca_cao_nong", key: 3,  tempo: 80,
@@ -167,7 +167,7 @@ const GEN = {
       ["Chị đi bộ thôi, quán gần nhà.", 1, "Sướng ghê, em ước được vậy."],
       ["Ừ.", -1, "...Dạ."]] },
     { q: "Chị ơi, quán mở lâu chưa?", a: [
-      ["Quán của ngoại chị để lại đó, giờ chị làm tiếp.", 2, "Ôi dễ thương quá, em sẽ ghé thường xuyên!"],
+      ["Quán của ngoại chị đó, ngoại về quê dưỡng già nên nhượng lại cho chị.", 2, "Ôi dễ thương quá, em sẽ ghé thường xuyên!"],
       ["Mới thôi, ủng hộ chị nhiều nha!", 1, "Chắc chắn rồi!"],
       ["Lâu lắm rồi, sao em không biết?", -1, "Ơ... em xin lỗi."]] },
     { q: "Hôm nay em vừa được tăng lương đó!", a: [
@@ -189,7 +189,7 @@ const GEN = {
   ],
 };
 
-// ---------- Khách quen (27 nhân vật) ----------
+// ---------- Khách ruột (27 nhân vật) ----------
 // loc: "global" xuất hiện mọi quán. day: ngày bắt đầu xuất hiện
 // look: g=giới tính, age, skin, hair (kiểu), hc (màu tóc), shirt (kiểu), sc (màu áo), acc (phụ kiện)
 // chats: [câu hỏi, [[lựa chọn, điểm thân thiết, câu đáp]...]]
@@ -229,10 +229,10 @@ const CHARACTERS = [
     happy: ["Mười điểm, cô cho con mười điểm!", "Vị này làm cô nhớ quán cũ ở Tràng Tiền ghê."],
     sad: ["Bài này... cô cho sáu điểm thôi con ạ."],
     chats: [
-      { q: "Ngày xưa ngoại con hay ngồi đúng chỗ này đan áo. Con có nhớ bà không?", a: [
-        ["Con nhớ ngoại lắm cô ạ. Mỗi ly cà phê con pha là con nghĩ tới bà.", 9, "Bà mà thấy con bây giờ chắc tự hào lắm."],
-        ["Con bận quá cũng ít nghĩ tới...", 1, "Bận thì bận, nhưng đừng quên gốc gác con nhé."],
-        ["Cô kể chuyện buồn làm gì ạ.", -4, "Ừ... cô xin lỗi."]] },
+      { q: "Ngày xưa ngoại con hay ngồi đúng chỗ này đan áo. Bà về quê rồi, con có hay gọi cho bà không?", a: [
+        ["Tối nào con cũng gọi kể chuyện quán cho bà nghe cô ạ.", 9, "Bà mà nghe chắc tự hào lắm. Nhớ gửi lời hỏi thăm của cô nhé."],
+        ["Con bận quá cũng ít gọi...", 1, "Bận thì bận, nhưng nhớ gọi cho bà con nhé."],
+        ["Bà ở quê vui hơn ở đây mà cô.", -2, "Ừ... nhưng bà vẫn nhớ con lắm đấy."]] },
       { q: "Con có đọc sách không? Dạo này cô đọc lại 'Hà Nội băm sáu phố phường'.", a: [
         ["Con có ạ, cuốn đó viết về quà Hà Nội hay lắm.", 8, "Ôi, con gái biết đọc sách, cô quý quá."],
         ["Con hay nghe podcast hơn cô ạ.", 3, "Cũng được, miễn là con chịu học."],
@@ -245,7 +245,7 @@ const CHARACTERS = [
     story: [
       { h: 1, lines: ["Uyên này, hồi con còn bé xíu, cô hay mua kẹo lạc cho con đấy.", "Thấy con lớn lên giữ quán của bà, cô mừng lắm."], reward: { rep: 3 } },
       { h: 3, lines: ["Cô viết một bài về quán con gửi báo phường.", "Họ đăng rồi! Tiêu đề là 'Cô chủ nhỏ giữ hồn phố cũ'."], reward: { rep: 6 } },
-      { h: 5, lines: ["Cô có cuốn sổ công thức tay của ngoại con, bà gửi cô giữ hộ trước khi đi.", "Bà dặn: 'Khi nào Uyên đủ vững, hãy đưa cho nó.'", "Giờ là lúc rồi, con ạ."], reward: { money: 800000 } },
+      { h: 5, lines: ["Cô có cuốn sổ công thức tay của ngoại con, bà gửi cô giữ hộ trước khi về quê dưỡng già.", "Bà dặn: 'Khi nào Uyên đủ vững, hãy đưa cho nó.'", "Giờ là lúc rồi, con ạ."], reward: { money: 800000 } },
     ] },
 
   { id: "tuan", name: "Tuấn", title: "Anh shipper", loc: "global", day: 2, fav: ["sua_da", "tra_chanh"], patience: 0.7, tip: 1.0,
@@ -282,7 +282,7 @@ const CHARACTERS = [
         ["Sợ hết tiền trả tiền nhà!", 5, "Haha, thực tế ghê, nhưng cũng đúng."],
         ["Sợ gián.", 2, "Ơ... cũng là một ý."]] },
       { q: "Uyên có tin vào chuyện định mệnh không?", a: [
-        ["Tin chứ, như việc ngoại để lại quán này cho mình.", 8, "Đẹp quá. Định mệnh mang mùi cà phê."],
+        ["Tin chứ, như việc ngoại nhượng lại quán này cho mình.", 8, "Đẹp quá. Định mệnh mang mùi cà phê."],
         ["Mình tin vào cố gắng hơn.", 6, "Cũng là một kiểu định mệnh đó."],
         ["Mai nói gì khó hiểu quá.", -2, "Ừ... nhà văn hay vậy mà."]] },
     ],
@@ -501,7 +501,7 @@ const CHARACTERS = [
     chats: [
       { q: "Hồi trước chú chở khách bằng xe Cub, giờ ai cũng xài app. Chú theo không kịp...", a: [
         ["Con chỉ chú cài app chạy luôn, thêm khách mà chú!", 9, "Thiệt hả? Con chỉ chú nghen!"],
-        ["Chú cứ chạy khách quen cũng được mà.", 5, "Ờ, khách quen thương chú lắm."],
+        ["Chú cứ chạy khách ruột cũng được mà.", 5, "Ờ, khách ruột thương chú lắm."],
         ["Chú nghỉ hưu đi.", -2, "Nghỉ thì lấy gì ăn con..."]] },
       { q: "Con biết hẻm nào ở Sài Gòn có tô hủ tiếu ngon nhất không?", a: [
         ["Chú dẫn đường đi, con bao chú một tô!", 8, "Chịu chơi! Chủ nhật này nha."],
@@ -811,8 +811,8 @@ const ACHIEVEMENTS = [
   { id: "s100",    name: "Tay pha quen việc",  desc: "Phục vụ 100 ly",                          test: s => s.totals.served >= 100 },
   { id: "s1000",   name: "Nghìn ly yêu thương", desc: "Phục vụ 1.000 ly toàn chuỗi",           test: s => s.totals.served >= 1000 },
   { id: "p50",     name: "Đôi tay vàng",       desc: "50 ly hoàn hảo",                          test: s => s.totals.perfect >= 50 },
-  { id: "friend",  name: "Người bạn thân",     desc: "Đạt 5 tim với một khách quen",            test: s => Object.values(s.chars).some(c => c.aff >= 100) },
-  { id: "meet10",  name: "Quán của mọi người", desc: "Làm quen 10 khách quen",                  test: s => Object.values(s.chars).filter(c => c.met).length >= 10 },
+  { id: "friend",  name: "Người bạn thân",     desc: "Đạt 5 tim với một khách ruột",            test: s => Object.values(s.chars).some(c => c.aff >= 100) },
+  { id: "meet10",  name: "Quán của mọi người", desc: "Làm quen 10 khách ruột",                  test: s => Object.values(s.chars).filter(c => c.met).length >= 10 },
   { id: "staff",   name: "Bà chủ thực thụ",    desc: "Thuê đủ 4 vị trí ở một quán",             test: s => s.shops.some(sh => ROLE_ORDER.every(r => sh.staff[r])) },
   { id: "shop2",   name: "Chi nhánh thứ hai",  desc: "Mở quán thứ 2",                            test: s => s.shops.length >= 2 },
   { id: "shop4",   name: "Chuỗi cà phê",       desc: "Mở 4 quán",                                test: s => s.shops.length >= 4 },
@@ -823,11 +823,12 @@ const ACHIEVEMENTS = [
 ];
 
 const INTRO = [
-  { who: "ngoai", text: "Uyên à, nếu con đọc được những dòng này thì ngoại đã đi xa rồi." },
-  { who: "ngoai", text: "Ngoại để lại cho con căn nhà nhỏ trong hẻm phố cổ, cái phin nhôm cũ và mấy người khách quen." },
-  { who: "ngoai", text: "Đừng lo nhiều về tiền. Cứ pha bằng cả tấm lòng, khách sẽ ở lại." },
-  { who: "ngoai", text: "Biết đâu một ngày, cửa hàng nhỏ của Uyên sẽ có mặt khắp đất nước này. Thương con. — Ngoại" },
-  { who: "uyen",  text: "Ngoại ơi... con sẽ làm được. Hôm nay, Cửa hàng nhỏ của Uyên chính thức mở cửa!" },
+  { who: "ngoai", text: "Uyên à, ngoại già rồi, tay không còn đủ vững để canh từng giọt phin nữa." },
+  { who: "ngoai", text: "Ngoại quyết định về quê dưỡng già: sáng ra vườn tưới rau, chiều nghe đài, tối ngủ sớm." },
+  { who: "ngoai", text: "Căn quán nhỏ trong hẻm phố cổ, cái phin nhôm cũ và mấy người khách ruột... ngoại nhượng lại hết cho con." },
+  { who: "ngoai", text: "Đừng lo nhiều về tiền. Cứ pha bằng cả tấm lòng, khách sẽ ở lại. Rảnh thì gọi điện kể chuyện quán cho ngoại nghe nhé." },
+  { who: "ngoai", text: "Biết đâu một ngày, cửa hàng nhỏ của Uyên sẽ có mặt khắp đất nước này. Ngoại tin con." },
+  { who: "uyen",  text: "Ngoại cứ yên tâm nghỉ ngơi nhé. Con sẽ giữ lửa cho quán! Hôm nay, Cửa hàng nhỏ của Uyên chính thức mở cửa!" },
 ];
 
 const TUTORIAL = [
@@ -836,4 +837,6 @@ const TUTORIAL = [
   "✅ Bấm “Phục vụ” khi xong. Đúng thứ tự = Hoàn hảo, thêm tip và uy tín!",
   "📦 Nguyên liệu hết thì vào Kho để nhập. Cuối ngày sẽ trả tiền thuê, điện nước, lương nhân viên.",
   "👥 Khi uy tín tăng, hãy thuê lần lượt: Phục vụ → Tạp vụ → Thu ngân → Pha chế. Có pha chế rồi, Uyên mới mở được quán mới!",
+  "💖 Khách ruột (tên hồng) có câu chuyện riêng. Khi họ hiện 💖, hãy “Ngồi tâm sự” — quán tạm ngưng đón khách để Uyên lắng nghe. Nghe hết chuyện, họ sẽ tặng kỷ vật cho Sổ sưu tập.",
+  "📺 Bấm vào TV trên tường để đổi nhạc hoặc tìm nhạc YouTube.",
 ];

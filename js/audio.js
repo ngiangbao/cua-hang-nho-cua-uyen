@@ -86,43 +86,76 @@ const Sound = (() => {
   }
 
   // ---- Bộ xếp lịch phát nhạc ----
-  let melodyOn = false, lastMel = 72;
+  let melodyOn = false, lastMel = 72, style = "swing", preset = "auto", locTempo = 92, locKey = 5;
+  function rim(t, vel = 0.05) {
+    const n = noise(), bp = ctx.createBiquadFilter(); bp.type = "bandpass"; bp.frequency.value = 1800; bp.Q.value = 4;
+    const g = ctx.createGain(); g.gain.setValueAtTime(vel, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+    n.connect(bp); bp.connect(g); g.connect(musicBus); n.start(t); n.stop(t + 0.08);
+  }
+  function crackle(t, dur) {
+    for (let i = 0; i < 6; i++) if (Math.random() < 0.6) {
+      const n = noise(), hp = ctx.createBiquadFilter(); hp.type = "highpass"; hp.frequency.value = 3000;
+      const g = ctx.createGain(), tt = t + Math.random() * dur; g.gain.setValueAtTime(0.02 * Math.random(), tt); g.gain.exponentialRampToValueAtTime(0.0001, tt + 0.01);
+      n.connect(hp); hp.connect(g); g.connect(musicBus); n.start(tt); n.stop(tt + 0.02);
+    }
+  }
+  function melody(t, offs, prob, vel) {
+    offs.forEach(off => {
+      if (Math.random() < prob) {
+        const base = 67 + key;
+        const cands = SCALE.map(s => base + s).filter(m => Math.abs(m - lastMel) <= 5);
+        const m = cands.length ? cands[Math.floor(Math.random() * cands.length)] : base;
+        lastMel = m; vibes(m, t + off, vel);
+      }
+    });
+  }
   function scheduleBeat(t) {
     const spb = 60 / tempo;
     const bar = Math.floor(beat / 4), b = beat % 4;
     const [deg, chord] = PROG[bar % PROG.length];
-    const [nDeg, nChord] = PROG[(bar + 1) % PROG.length];
+    const [nDeg] = PROG[(bar + 1) % PROG.length];
     const root = 36 + key + deg;
-    const swing = spb * 0.66;
-
-    // Walking bass
-    let bn;
-    if (b === 0) bn = root;
-    else if (b === 3) { const nr = 36 + key + nDeg; bn = nr + (Math.random() < 0.5 ? 1 : -1); }
-    else bn = root + chord[Math.random() < 0.5 ? 1 : 2] + (b === 2 && Math.random() < 0.3 ? 12 : 0);
-    bass(bn, t, spb * 0.92);
-
-    // Trống: ride "ding ding-a ding", chổi quét phách 2 và 4
-    ride(t, b % 2 ? 0.05 : 0.035);
-    if (b === 1 || b === 3) { ride(t + swing, 0.025); brush(t, 0.05); }
-    if (b === 0 && Math.random() < 0.4) kick(t);
-
-    // Piano đệm (bỏ nốt gốc — voicing kiểu jazz)
     const voicing = [chord[1], chord[3], chord[2] + 12, 14].map(x => 52 + key + deg + x).map(m => m > 76 ? m - 12 : m);
-    const hits = [[0, 0.25], [swing, 0.55], [spb + swing, 0.5], [spb * 2 + swing, 0.25]];
-    if (b === 0) hits.forEach(([off, p]) => { if (Math.random() < p) voicing.forEach(m => epiano(m, t + off, spb * 1.2, 0.045)); });
-
-    // Giai điệu vibraphone ngẫu hứng theo câu 2 ô nhịp
     if (b === 0 && bar % 2 === 0) melodyOn = Math.random() < 0.7;
-    if (melodyOn) {
-      [0, swing].forEach(off => {
-        if (Math.random() < 0.55) {
-          const base = 67 + key;
-          const cands = SCALE.map(s => base + s).filter(m => Math.abs(m - lastMel) <= 5);
-          const m = cands.length ? cands[Math.floor(Math.random() * cands.length)] : base;
-          lastMel = m; vibes(m, t + off, 0.07);
-        }
-      });
+
+    if (style === "bossa") {
+      // Bass bossa: gốc - quãng năm, nhịp thẳng
+      const half = spb / 2;
+      if (b === 0 || b === 2) bass(root, t, spb * 1.2);
+      if (b === 1 || b === 3) bass(root + 7, t + half, spb * 0.9);
+      [0, half].forEach(o => ride(t + o, 0.018));
+      if ([0, 3].includes(b)) rim(t + (b === 3 ? half : 0), 0.06);
+      if (b === 1 || b === 2) rim(t + (b === 1 ? half : 0), 0.05);
+      if (b === 0) [0, spb * 1.5, spb * 2.5].forEach(o => voicing.forEach(m => epiano(m, t + o, spb * 0.9, 0.04)));
+      if (melodyOn) melody(t, [0, half], 0.4, 0.06);
+    } else if (style === "lofi") {
+      const swing = spb * 0.6;
+      if (b === 0) { kick(t); voicing.forEach(m => epiano(m - 12 + 12, t, spb * 3.8, 0.05)); bass(root, t, spb * 1.8); }
+      if (b === 2) { kick(t + swing); bass(root + chord[2], t, spb * 1.6); }
+      if (b === 1 || b === 3) brush(t, 0.09);
+      [0, swing].forEach(o => ride(t + o, 0.012));
+      crackle(t, spb);
+      if (melodyOn) melody(t, [0, swing], 0.3, 0.05);
+    } else if (style === "ballad") {
+      const half = spb / 2;
+      if (b === 0) bass(root, t, spb * 3.8);
+      [0, half].forEach((o, i) => { const v = voicing[(b * 2 + i) % voicing.length]; epiano(v, t + o, spb * 1.6, 0.05); });
+      if (b === 0) ride(t, 0.02);
+      if (melodyOn && b % 2 === 0) melody(t, [0], 0.6, 0.06);
+    } else {
+      // Swing: walking bass, ride "ding ding-a ding", chổi ở phách 2 và 4
+      const swing = spb * 0.66;
+      let bn;
+      if (b === 0) bn = root;
+      else if (b === 3) { const nr = 36 + key + nDeg; bn = nr + (Math.random() < 0.5 ? 1 : -1); }
+      else bn = root + chord[Math.random() < 0.5 ? 1 : 2] + (b === 2 && Math.random() < 0.3 ? 12 : 0);
+      bass(bn, t, spb * 0.92);
+      ride(t, b % 2 ? 0.05 : 0.035);
+      if (b === 1 || b === 3) { ride(t + swing, 0.025); brush(t, 0.05); }
+      if (b === 0 && Math.random() < 0.4) kick(t);
+      const hits = [[0, 0.25], [swing, 0.55], [spb + swing, 0.5], [spb * 2 + swing, 0.25]];
+      if (b === 0) hits.forEach(([off, p]) => { if (Math.random() < p) voicing.forEach(m => epiano(m, t + off, spb * 1.2, 0.045)); });
+      if (melodyOn) melody(t, [0, swing], 0.55, 0.07);
     }
     beat++;
   }
@@ -137,10 +170,16 @@ const Sound = (() => {
     timer = setInterval(scheduler, 30);
   }
   function stop() { playing = false; clearInterval(timer); }
+  function applyPreset() {
+    const P = MUSIC_PRESETS[preset];
+    if (!P || preset === "auto") { tempo = locTempo; key = locKey; style = "swing"; }
+    else { tempo = P.tempo; key = P.key; style = P.style; }
+  }
   function setStyle(locId) {
     const L = LOCATIONS[locId]; if (!L) return;
-    tempo = L.tempo; key = L.key;
+    locTempo = L.tempo; locKey = L.key; applyPreset();
   }
+  function setPreset(p) { preset = p; applyPreset(); beat = 0; }
   function setMusicVol(v) { musicVol = v; if (musicBus) musicBus.gain.value = v * 0.5; }
   function setSfxVol(v) { sfxVol = v; if (sfxBus) sfxBus.gain.value = v; }
 
@@ -165,9 +204,12 @@ const Sound = (() => {
       case "error": tone(220, t, 0.25, "sawtooth", 0.06, 160); break;
       case "perfect": [523, 659, 784, 1047].forEach((f, i) => tone(f, t + i * 0.07, 0.3, "triangle", 0.08)); break;
       case "heart": [660, 880, 1320].forEach((f, i) => tone(f, t + i * 0.1, 0.4, "sine", 0.1)); break;
+      case "alarm": [0, 0.2, 0.4].forEach(d => tone(880, t + d, 0.15, "square", 0.05, 660)); break;
+      case "meow": tone(700, t, 0.35, "sine", 0.12, 1100); tone(1100, t + 0.2, 0.3, "sine", 0.08, 600); break;
+      case "powerdown": tone(400, t, 0.8, "sawtooth", 0.06, 60); break;
       case "day": [392, 523, 659, 784].forEach((f, i) => tone(f, t + i * 0.12, 0.5, "triangle", 0.07)); break;
     }
   }
 
-  return { init, start, stop, setStyle, setMusicVol, setSfxVol, sfx, get playing() { return playing; } };
+  return { init, start, stop, setStyle, setPreset, setMusicVol, setSfxVol, sfx, get playing() { return playing; } };
 })();

@@ -19,7 +19,9 @@ const weekday = d => WEEKDAYS[(d - 1) % 7];
 const clock = t => String(Math.floor(t / 60)).padStart(2, "0") + ":" + String(t % 60).padStart(2, "0");
 
 const DAY_START = 7 * 60, DAY_END = 21 * 60, MS_PER_MIN = 300;
-const POWER_ING = ["espresso", "foam", "matcha", "cam", "bo"];
+const POWER_EQUIP = ["may_espresso", "may_xay", "may_danh_trung"];
+const powerIng = k => POWER_EQUIP.includes(INGREDIENTS[k].equip);
+const powerDrink = id => DRINKS[id].recipe.some(powerIng);
 const SAVE_KEY = slot => "chnu_save_" + slot;
 const META_KEY = "chnu_meta";
 
@@ -27,7 +29,7 @@ const META_KEY = "chnu_meta";
 let S = null;     // dữ liệu được lưu
 let slot = 1;     // ô lưu hiện tại
 const R = {       // dữ liệu tạm trong ngày
-  phase: "title", time: DAY_START, speed: 1, paused: false, acc: 0, uid: 0,
+  phase: "title", E: 0, time: DAY_START, speed: 1, paused: false, acc: 0, uid: 0,
   customers: [], tickets: [], sel: null, cup: [], drip: false,
   today: null, weatherBy: {}, event: null, goals: [], clean: 100, cleanCd: false,
   regularsToday: [], sim: {}, cands: {}, bJob: null, lastSave: 0, dialog: null, criticDone: false, closingShown: false,
@@ -43,7 +45,8 @@ function newState() {
     target: { phin: 40, sua_dac: 30, sua_tuoi: 20, duong: 30, tra: 20, chanh: 15, sa: 10, cacao: 10 },
     equip: {}, secrets: {}, chars: {}, history: [], achv: {},
     totals: { served: 0, perfect: 0, earned: 0, chats: 0 },
-    flowBonus: 0, marketing: [], settings: { music: 0.5, sfx: 0.6, hints: true, musicOn: true },
+    flowBonus: 0, marketing: [], settings: { music: 0.5, sfx: 0.6, hints: true, musicOn: true, musicPreset: "auto" },
+    items: { phin_ngoai: 1 }, setsDone: {}, tipLoc: {},
     introDone: false, debtDays: 0, lastReport: null,
   };
   S = st; st.shops.push(newShop("hanoi", true));
@@ -100,11 +103,17 @@ function fit() {
   const vp = $("#viewport"), cs = getComputedStyle(vp);
   const pl = parseFloat(cs.paddingLeft) || 0, pr = parseFloat(cs.paddingRight) || 0, pt = parseFloat(cs.paddingTop) || 0, pb = parseFloat(cs.paddingBottom) || 0;
   const w = innerWidth - pl - pr, h = innerHeight - pt - pb;
-  const s = Math.min(w / 1600, h / 900);
+  // Khung rộng 1600, cao từ 900 (16:9) tới 1200 (4:3) tùy màn hình — iPad dùng thêm chiều cao
+  const H = Math.round(clamp(1600 * h / w, 900, 1200));
+  const E = H - 900;
+  const s = Math.min(w / 1600, h / H);
   const st = $("#stage");
+  st.style.height = H + "px";
+  st.style.setProperty("--E", E + "px");
+  if (E !== R.E) { R.E = E; if (S) { $("#scene-bg").innerHTML = Art.sceneBg(shop().loc, shop().decor, E); renderStaff(); R.customers.forEach(c => { if (c.el) c.el.style.left = slotX(c.slot, maxSlots()) + "px"; }); } }
   st.style.transform = `scale(${s})`;
   st.style.left = pl + (w - 1600 * s) / 2 + "px";
-  st.style.top = pt + (h - 900 * s) / 2 + "px";
+  st.style.top = pt + (h - H * s) / 2 + "px";
 }
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 const isStandalone = () => window.navigator.standalone === true || matchMedia("(display-mode: standalone), (display-mode: fullscreen)").matches;
@@ -140,8 +149,8 @@ function drinkAvail(id) {
   if (d.secret && !S.secrets[id]) return false;
   return d.recipe.every(ingAvail);
 }
-const outageNow = () => R.event && R.event.outage && R.time >= R.event.outage[0] && R.time < R.event.outage[1];
-const menuList = () => Object.keys(DRINKS).filter(drinkAvail).filter(id => !outageNow() || !DRINKS[id].recipe.some(k => POWER_ING.includes(k)));
+const outageNow = () => R.phase === "open" && (!!(R.powerCut && R.time < R.powerCut.until) || !!(R.event && R.event.outage && R.time >= R.event.outage[0] && R.time < R.event.outage[1]));
+const menuList = () => Object.keys(DRINKS).filter(drinkAvail).filter(id => !outageNow() || !powerDrink(id));
 function ingPrice(k) {
   let p = INGREDIENTS[k].cost || 0;
   if (R.event && R.event.priceUp && R.event.priceUp.includes(k)) p *= 1.3;
@@ -225,6 +234,7 @@ function prepareDay() {
   R.goals = makeGoals();
   R.regularsToday = []; R.sim = {}; R.criticDone = false; R.clean = 100;
   R.customers = []; R.tickets = []; R.sel = null; R.cup = []; R.bJob = null; R.closingShown = false;
+  clearSurprises();
   genCands();
   if (R.event && R.event.cost) { S.money -= R.event.cost; R.today.eventCost += R.event.cost; }
   autoRestock();
@@ -263,6 +273,7 @@ function frame(now) {
   if (R.phase === "open" && !R.paused && $("#modal").classList.contains("hidden") && !R.dialog) {
     R.acc += dt * R.speed;
     while (R.acc >= MS_PER_MIN) { R.acc -= MS_PER_MIN; tickMinute(); if (R.phase !== "open") break; }
+    if (R.qte) qteTick(dt);
   }
   requestAnimationFrame(frame);
 }
@@ -288,6 +299,7 @@ function tickMinute() {
   if (R.time < DAY_END) {
     if (rand() < lambda(S.active, R.time)) spawnCustomer();
     if (R.event && R.event.critic && !R.criticDone && R.time > 10 * 60 && rand() < 0.01) spawnCustomer(true);
+    if (R.time > DAY_START + 30 && R.time < DAY_END - 30 && !R.qte) maybeSurprise();
   } else if (!R.closingShown) {
     R.closingShown = true; $("#closed-sign").textContent = "🔒 Đã đóng cửa"; $("#closed-sign").classList.remove("hidden");
     toast("🌙 21:00 — Quán ngừng nhận khách mới. Phục vụ nốt khách đang chờ nhé!");
@@ -301,6 +313,7 @@ function tickMinute() {
       if (c.state === "order" && sh.staff.waiter && c.wait >= Math.max(1, 4 - sh.staff.waiter.skill * 0.6)) takeOrder(c);
     }
   }
+  syncPower();
   // Pha chế tự động tại quán Uyên đứng
   baristaTick();
   // Các quán khác tự vận hành
@@ -377,10 +390,13 @@ function spawnCustomer(critic) {
     c = { reg: ch, name: ch.name, look: ch.look, drink: pickDrink(S.active, ch.fav), patF: ch.patience };
   } else {
     const look = randLook();
-    c = { reg: null, name: genName(look), look, drink: pickDrink(S.active), patF: 0.8 + rand() * 0.5 };
+    const n = S.day >= 2 && rand() < 0.15 ? (rand() < 0.6 ? 2 : 3) : 1;
+    const items = Array.from({ length: n }, () => pickDrink(S.active));
+    c = { reg: null, name: genName(look), look, drink: items[0], items, patF: 0.8 + rand() * 0.5 };
   }
+  c.items = c.items || [c.drink]; c.idx = 0;
   const pf = c.patF * (sh.staff.waiter ? 1.25 : 1) * (sh.decor.loa_jazz ? 1.15 : 1) * (hasTrait(sh, "vui") ? 1.1 : 1);
-  Object.assign(c, { uid: ++R.uid, slot: s, state: "walking", wait: 0, chatted: false, tipBonus: 0, maxOrder: Math.round(55 * pf), maxDrink: Math.round(110 * pf) });
+  Object.assign(c, { uid: ++R.uid, slot: s, state: "walking", wait: 0, chatted: false, tipBonus: 0, maxOrder: Math.round(55 * pf), maxDrink: Math.round(110 * pf * (1 + 0.5 * (c.items.length - 1))) });
   c.pat = c.max = c.maxOrder;
   mountCustomer(c, c.critic ? "📝 " : c.reg ? "💖 " : "");
 }
@@ -407,8 +423,8 @@ function renderBubble(c) {
   const col = pct > 50 ? "#52b788" : pct > 25 ? "#f4a261" : "#e63946";
   const pbar = `<div class="pbar"><div style="width:${pct}%;background:${col}"></div></div>`;
   if (c.state === "walking") b.innerHTML = `<span class="big">👋</span>`;
-  else if (c.state === "order") b.innerHTML = `<span class="big">${storyPending(c) ? "💖" : "💬"}</span>${pbar}`;
-  else if (c.state === "drink") b.innerHTML = `<span class="mini-cup">${Art.drinkIcon(c.drink)}</span>${DRINKS[c.drink].name}${!c.chatted ? " 💬" : ""}${storyPending(c) ? " 💖" : ""}${pbar}`;
+  else if (c.state === "order") b.innerHTML = `<span class="big">${storyPending(c) ? "💖" : "💬"}${c.items && c.items.length > 1 ? `<small class="multi">×${c.items.length}</small>` : ""}</span>${pbar}`;
+  else if (c.state === "drink") b.innerHTML = `<span class="mini-cup">${Art.drinkIcon(c.drink)}</span>${DRINKS[c.drink].name}${c.items && c.items.length > 1 ? ` <b>(${c.idx + 1}/${c.items.length})</b>` : ""}${!c.chatted ? " 💬" : ""}${storyPending(c) ? " 💖" : ""}${pbar}`;
   else b.innerHTML = c.say || "";
 }
 function updateBars() {
@@ -423,7 +439,7 @@ function updateBars() {
     d.style.width = pct + "%"; d.style.background = pct > 50 ? "#52b788" : pct > 25 ? "#f4a261" : "#e63946";
   });
 }
-function custPos(c) { return { x: slotX(c.slot, maxSlots()), y: 250 }; }
+function custPos(c) { return { x: slotX(c.slot, maxSlots()), y: 250 + R.E }; }
 function takeOrder(c) {
   if (c.state !== "order") return;
   c.state = "drink"; c.pat = c.max = c.maxDrink;
@@ -473,8 +489,11 @@ function openDialog(look, name, text, choices, extra) {
     box.appendChild(b);
   }
   $("#dialog").classList.remove("hidden");
+  const reg = extra && extra.c && extra.c.reg;
+  $("#scene").classList.toggle("tamsu", !!reg);
+  if (reg) $("#tamsu-banner").textContent = `☕ Đang trò chuyện với ${reg.name} — quán tạm ngưng đón khách`;
 }
-function closeDialog() { R.dialog = null; $("#dialog").classList.add("hidden"); }
+function closeDialog() { R.dialog = null; $("#dialog").classList.add("hidden"); $("#scene").classList.remove("tamsu"); }
 function dlgName(c) {
   if (c.critic) return `📝 Nhà phê bình <small>Khách đặc biệt</small>`;
   if (!c.reg) return `${c.name} <small>Khách vãng lai</small>`;
@@ -498,12 +517,13 @@ function showCustomerMenu(c, overrideText) {
   if (overrideText) text = overrideText;
   else if (c.state === "order") {
     const greet = c.critic ? "Chào cô chủ. Tôi muốn thưởng thức món ngon nhất của quán." : pick(c.reg ? c.reg.greet : GEN.greet);
-    text = greet + " " + pick(GEN.order).replace("{d}", d.name);
+    const n = c.items ? c.items.length : 1;
+    text = greet + " " + (n > 1 ? `Cho mình ${n} ly luôn nhé: ${c.items.map(x => DRINKS[x].name).join(", ")}!` : pick(GEN.order).replace("{d}", d.name));
   } else text = pick(["Mình đang đợi ", "Không vội đâu, ", "Ly "]) + d.name + (rand() < 0.5 ? " nha!" : " của mình sắp xong chưa?");
   const choices = [];
-  if (c.state === "order") choices.push({ label: `📝 Nhận order: ${d.name}`, main: true, fn: () => { takeOrder(c); closeDialog(); } });
+  if (c.state === "order") choices.push({ label: `📝 Nhận order: ${c.items && c.items.length > 1 ? c.items.length + " ly" : d.name}`, main: true, fn: () => { takeOrder(c); closeDialog(); } });
   const st = storyPending(c);
-  if (st) choices.push({ label: "💖 Nghe chuyện", fn: () => playStory(c, st) });
+  if (st) choices.push({ label: "💖 Ngồi tâm sự", fn: () => playStory(c, st) });
   if (!c.chatted && !c.critic) choices.push({ label: "💬 Trò chuyện", fn: () => chat(c) });
   choices.push({ label: c.state === "order" ? "⏳ Đợi chút nhé" : "👌 Đóng", fn: closeDialog });
   openDialog(c.look, dlgName(c), text, choices, { c, mood: "neutral" });
@@ -529,21 +549,187 @@ function chat(c) {
   openDialog(c.look, dlgName(c), topic.q, choices, { c, mood: "neutral" });
 }
 function playStory(c, st) {
+  const ch = c.reg, cs = S.chars[ch.id], reps = (STORY_REPLIES[ch.id] || [])[cs.story];
   let i = 0;
+  const talk = { c, mood: "happy" };
+  const finish = () => {
+    cs.story++;
+    applyReward(st.reward, ch.name);
+    Sound.sfx("heart"); renderBubble(c);
+    const gift = cs.story >= ch.story.length && Object.keys(ITEMS).find(k => ITEMS[k].from === ch.id);
+    if (gift && !S.items[gift]) return giftScene(c, gift);
+    showCustomerMenu(c, "Cảm ơn Uyên đã lắng nghe nha!");
+  };
+  const replyStep = () => {
+    if (!reps) return finish();
+    openDialog(Art.UYEN, `Bảo Uyên <small>trả lời ${ch.name}</small>`, "Uyên nên nói gì đây?", shuffle(reps).map(([say, delta, resp]) => ({ label: "💬 " + say, fn: () => {
+      const before = Math.floor(cs.aff / 20);
+      cs.aff = clamp(cs.aff + delta, 0, 100);
+      if (Math.floor(cs.aff / 20) > before) { toast(`💖 ${ch.name} đã lên ${Math.floor(cs.aff / 20)} tim!`, "gold"); Sound.sfx("heart"); }
+      const p = custPos(c); floater(p.x + 40, p.y, delta >= 5 ? "💖💖" : delta > 0 ? "💖" : "💔", delta < 0 ? "#e63946" : "#ff4d6d");
+      openDialog(c.look, dlgName(c), resp, [{ label: "💖 Cảm ơn đã kể Uyên nghe", main: true, fn: finish }], { c, mood: delta > 0 ? "happy" : "sad" });
+    } })), talk);
+  };
   const step = () => {
     if (i < st.lines.length) {
       const line = st.lines[i++];
-      openDialog(c.look, dlgName(c), line, [{ label: i < st.lines.length ? "▶ Tiếp" : "💖 Cảm ơn nhé!", main: true, fn: step }], { c, mood: "happy" });
-    } else {
-      const cs = S.chars[c.reg.id]; cs.story++;
-      applyReward(st.reward, c.reg.name);
-      Sound.sfx("heart");
-      renderBubble(c);
-      showCustomerMenu(c, "Cảm ơn Uyên đã lắng nghe nha!");
-    }
+      openDialog(c.look, dlgName(c), line, [{ label: "▶ Nghe tiếp", main: true, fn: step }], talk);
+    } else replyStep();
   };
-  step();
+  openDialog(Art.UYEN, "Bảo Uyên", `Uyên rót thêm ly nước, kéo ghế ngồi cạnh ${ch.name}: "Hôm nay kể Uyên nghe chuyện của mình đi."`, [{ label: "☕ Ngồi xuống lắng nghe", main: true, fn: step }], talk);
 }
+function giftScene(c, id) {
+  const I = ITEMS[id], ch = c.reg;
+  giveItem(id, ch.name);
+  openDialog(c.look, dlgName(c), `${ch.name} đặt vào tay Uyên một món đồ: ${I.icon} ${I.name}. “${I.desc}” Uyên giữ giúp nhé, coi như một phần đời của ${ch.name} ở lại quán.`,
+    [{ label: "📚 Cất vào Sổ sưu tập", main: true, fn: () => showCustomerMenu(c, "Cảm ơn Uyên vì đã luôn lắng nghe.") }], { c, mood: "happy" });
+}
+function offerSwap(c, t) {
+  const alts = shuffle(menuList()).slice(0, 3);
+  if (!alts.length) { toast("Không còn món nào pha được khi cúp điện!", "bad"); return; }
+  openDialog(c.look, dlgName(c), `Cúp điện hả chị? Vậy ${DRINKS[t.drink].name} chắc không làm được rồi... đổi giúp mình món khác nhé.`,
+    alts.map(id => ({ label: `🔁 ${DRINKS[id].name}`, fn: () => {
+      c.drink = id; if (c.items) c.items[c.idx] = id; t.drink = id;
+      c.pat = Math.min(c.max, c.pat + 20); R.sel = t.id;
+      closeDialog(); renderBubble(c); renderTickets(); renderBench(); Sound.sfx("pop");
+    } })).concat([{ label: "⏳ Mình chờ có điện", fn: closeDialog }]), { c, mood: "neutral" });
+}
+
+// ---------- Kỷ vật & sổ sưu tập ----------
+const setItems = set => Object.keys(ITEMS).filter(k => ITEMS[k].set === set);
+function giveItem(id, from) {
+  if (S.items[id]) return;
+  S.items[id] = S.day;
+  const I = ITEMS[id];
+  toast(`📚 Kỷ vật mới: ${I.icon} ${I.name}${from ? " — từ " + from : ""}`, "gold");
+  Sound.sfx("heart");
+  checkSets(); renderDockDots();
+}
+function checkSouvenirs() {
+  S.shops.forEach(sh => {
+    const id = Object.keys(ITEMS).find(k => ITEMS[k].souvenir === sh.loc);
+    if (id && !S.items[id] && sh.rep >= 60) giveItem(id, "quà lưu niệm " + LOCATIONS[sh.loc].city);
+  });
+}
+function checkSets() {
+  for (const set of SET_ORDER) {
+    if (S.setsDone[set] || !setItems(set).every(k => S.items[k])) continue;
+    S.setsDone[set] = S.day;
+    const Z = ITEM_SETS[set], rw = Z.reward;
+    if (rw.money) { S.money += rw.money; if (R.today) R.today.bonus += rw.money; }
+    if (rw.flow) S.flowBonus += rw.flow;
+    if (rw.tipLoc) S.tipLoc[rw.tipLoc] = (S.tipLoc[rw.tipLoc] || 0) + 0.1;
+    toast(`🏅 Hoàn thành bộ sưu tập “${Z.name}”! ${Z.desc}`, "gold");
+    Sound.sfx("perfect");
+    if (SET_ORDER.every(k => S.setsDone[k])) setTimeout(showEnding, 2000);
+  }
+  renderHud();
+}
+function showEnding() {
+  let i = 0;
+  const step = () => {
+    if (i >= ENDING.length) { closeModal(); toast("👵 Ngoại về thăm quán. Cảm ơn bạn đã chơi Cửa hàng nhỏ của Uyên!", "gold"); if (R.phase === "prepare") showPrepare(); return; }
+    const line = ENDING[i++];
+    openModal("👵 Ngoại ghé thăm", `<div class="intro-wrap"><div class="portrait">${Art.person(Art.NGOAI, "happy")}</div>
+      <div class="intro-text">${line}<div style="margin-top:20px"><button class="btn big" id="e-next">${i < ENDING.length ? "▶ Tiếp" : "🤗 Ôm ngoại thật chặt"}</button></div></div></div>`, { noClose: true });
+    $("#e-next").onclick = step;
+  };
+  Sound.sfx("day"); step();
+}
+
+// ---------- Tình huống bất ngờ ----------
+function clearSurprises() {
+  if (R.qte && R.qte.el) R.qte.el.remove();
+  R.qte = null; R.powerCut = null; R.powerCutDone = false; R.wasOut = false;
+  $("#scene").classList.remove("dark");
+}
+function syncPower() {
+  const out = outageNow();
+  if (out === !!R.wasOut) return;
+  R.wasOut = out;
+  $("#scene").classList.toggle("dark", out);
+  if (out) { toast("⚡ Mất điện! Món cần máy espresso, máy xay, máy đánh trứng tạm ngưng.", "bad"); Sound.sfx("powerdown"); }
+  else toast("💡 Có điện lại rồi!", "gold");
+  musicSuspend(out);
+  renderIngredients(); renderTickets();
+}
+function maybeSurprise() {
+  if (S.day < 2) return;
+  if (!R.powerCutDone && rand() < 0.0015) {
+    R.powerCutDone = true; R.powerCut = { until: R.time + 75 };
+    syncPower(); startQte("generator");
+    return;
+  }
+  if (rand() < 0.0045) {
+    const pool = ["cat", "rush"];
+    if (R.customers.length) pool.push("spill", "wallet");
+    if (R.weatherBy[shop().loc] === "mua") pool.push("leak", "leak");
+    startQte(pick(pool));
+  }
+}
+function placeQte(box) {
+  box.style.left = (80 + rand() * 640) + "px";
+  box.style.top = (110 + R.E * 0.5 + rand() * 170) + "px";
+}
+function startQte(type) {
+  const Q = QTES[type]; if (!Q || R.qte) return;
+  const box = el("div", "qte");
+  box.innerHTML = `<div class="qte-title">${Q.title}</div><button class="qte-btn">${Q.icon}</button><div class="qte-hint">${Q.hint}${Q.taps > 1 ? ` <b class="qte-count">0/${Q.taps}</b>` : ""}</div><div class="qte-bar"><div></div></div>`;
+  placeQte(box);
+  $("#qte-layer").appendChild(box);
+  R.qte = { type, Q, el: box, left: Q.time * 1000, taps: 0 };
+  box.querySelector(".qte-btn").addEventListener("pointerdown", e => {
+    e.preventDefault();
+    if (!R.qte || R.qte.el !== box) return;
+    R.qte.taps++; Sound.sfx("pop");
+    const cnt = box.querySelector(".qte-count"); if (cnt) cnt.textContent = `${R.qte.taps}/${Q.taps}`;
+    box.querySelector(".qte-btn").classList.remove("hit"); void box.offsetWidth; box.querySelector(".qte-btn").classList.add("hit");
+    if (R.qte.taps >= Q.taps) qteEnd(true);
+    else if (Q.move) placeQte(box);
+  });
+  Sound.sfx(type === "cat" ? "meow" : "alarm");
+}
+function qteTick(dt) {
+  const q = R.qte; q.left -= dt;
+  q.el.querySelector(".qte-bar div").style.width = clamp(q.left / (q.Q.time * 1000) * 100, 0, 100) + "%";
+  if (q.left <= 0) qteEnd(false);
+}
+function qteEnd(win) {
+  const { type, el: box } = R.qte; R.qte = null;
+  box.classList.add(win ? "win" : "lose"); setTimeout(() => box.remove(), 500);
+  const sh = shop();
+  const T = (msg, bad) => toast(msg, bad ? "bad" : "gold");
+  switch (type) {
+    case "generator":
+      if (win) { R.powerCut = null; sh.rep = clamp(sh.rep + 1, 0, 100); syncPower(); T("⚙️ Máy phát nổ máy! Quán có điện trở lại."); }
+      else T("⚙️ Máy phát không nổ... chờ điện lưới khoảng hơn một tiếng nữa.", true);
+      break;
+    case "spill":
+      if (win) { sh.rep = clamp(sh.rep + 1, 0, 100); T("🙌 Đỡ kịp! Khách cảm ơn rối rít. +1 uy tín"); }
+      else { R.clean = clamp(R.clean - 30, 0, 100); T("💦 Ly đổ tung tóe... sàn bẩn rồi!", true); }
+      break;
+    case "cat":
+      if (win) T("🐈 Mèo được mời ra ngoài, còn ngoái lại kêu meo meo.");
+      else { S.inv.sua_tuoi = Math.max(0, (S.inv.sua_tuoi || 0) - 3); T("🐈 Mèo uống trộm mất 3 phần sữa tươi!", true); }
+      break;
+    case "leak":
+      if (win) T("🪣 Hứng kịp, sàn vẫn khô ráo!");
+      else { R.clean = clamp(R.clean - 25, 0, 100); T("💧 Nước dột ướt sàn rồi!", true); }
+      break;
+    case "wallet":
+      if (win) { sh.rep = clamp(sh.rep + 2, 0, 100); T("👛 Uyên giữ ví trả khách. Khách khen quán tử tế! +2 uy tín"); }
+      else T("👛 Khách tự quay lại tìm thấy ví, may quá.");
+      break;
+    case "rush": {
+      const n = win ? 3 : 1;
+      for (let k = 0; k < n; k++) setTimeout(() => { if (R.phase === "open") spawnCustomer(); }, k * 500);
+      T(win ? "📣 Kê bàn kịp! Cả đoàn vào quán." : "📣 Thiếu chỗ, chỉ một người ở lại.", !win);
+      break;
+    }
+  }
+  renderHud(); renderIngredients();
+}
+
 function applyReward(rw, who) {
   const parts = [];
   if (rw.money) { S.money += rw.money; R.today.bonus += rw.money; parts.push("+" + money(rw.money)); }
@@ -570,7 +756,7 @@ function addIngredient(k) {
   if (R.phase !== "open") { toast("Quán chưa mở cửa đâu Uyên ơi!", "bad"); return; }
   if (R.drip) return;
   if (!ingAvail(k)) { const I = INGREDIENTS[k]; toast(`🔒 Cần mua ${EQUIPMENT[I.equip] ? EQUIPMENT[I.equip].name : "công thức"} để dùng ${I.name}`, "bad"); return; }
-  if (outageNow() && POWER_ING.includes(k)) { toast("🔌 Đang cúp điện, máy không chạy được!", "bad"); return; }
+  if (outageNow() && powerIng(k)) { toast("🔌 Đang cúp điện, máy không chạy được!", "bad"); return; }
   const I = INGREDIENTS[k];
   if (!I.free && (S.inv[k] || 0) <= 0) { toast(`📦 Hết ${I.name}! Vào Kho để nhập thêm.`, "bad"); Sound.sfx("error"); return; }
   if (R.cup.length >= 7) { toast("Ly đầy rồi!", "bad"); return; }
@@ -598,7 +784,7 @@ function resolveServe(c, q, byStaff) {
   const payRate = { perfect: 1, good: 1, ok: 0.7, wrong: 0 }[q];
   let tipRate = { perfect: 0.15, good: 0.06, ok: 0, wrong: 0 }[q];
   if (q !== "wrong") {
-    tipRate += (c.pat / c.max) * 0.08 + c.tipBonus + (sh.decor.cay_xanh ? 0.05 : 0) + (sh.staff.cashier ? 0.1 : 0) + (sh.decor.may_lanh ? 0.05 : 0) + ((R.event && R.event.tip) || 0) + (hasTrait(sh, "duyen") ? 0.05 : 0);
+    tipRate += (c.pat / c.max) * 0.08 + c.tipBonus + (sh.decor.cay_xanh ? 0.05 : 0) + (sh.staff.cashier ? 0.1 : 0) + (sh.decor.may_lanh ? 0.05 : 0) + ((R.event && R.event.tip) || 0) + (hasTrait(sh, "duyen") ? 0.05 : 0) + (S.tipLoc[sh.loc] || 0);
     tipRate *= c.reg ? c.reg.tip : 1;
     if (R.clean < 50) tipRate *= 0.5;
   }
@@ -626,6 +812,19 @@ function resolveServe(c, q, byStaff) {
     if (after > before) { toast(`💖 ${c.reg.name} đã lên ${after} tim!`, "gold"); Sound.sfx("heart"); }
   }
   if (!sh.staff.cleaner) R.clean = clamp(R.clean - 4, 0, 100);
+  // Còn ly khác trong cùng order
+  if (q !== "wrong" && c.items && c.idx < c.items.length - 1) {
+    c.idx++; c.drink = c.items[c.idx];
+    c.pat = Math.min(c.max, c.pat + 40);
+    const tk = R.tickets.find(t => t.id === c.uid); if (tk) { tk.drink = c.drink; tk.barista = false; }
+    const p = custPos(c);
+    floater(p.x + 20, p.y + 50, `${q === "perfect" ? "Hoàn hảo! " : "Ngon! "}+${money(pay + tip)} (${c.idx}/${c.items.length})`, q === "perfect" ? "#e07a5f" : "#2a9d8f");
+    speech(p.x - 20, p.y - 10, `Ngon! Còn ${c.items.length - c.idx} ly nữa nha!`);
+    Sound.sfx(q === "perfect" ? "perfect" : "coin");
+    renderBubble(c); renderTickets(); renderBench(); renderIngredients();
+    checkGoals(); checkAchv(); renderHud(); renderStats();
+    return;
+  }
   // Phản ứng
   const p = custPos(c);
   const mood = q === "wrong" ? "angry" : q === "ok" ? "sad" : q === "perfect" ? "happy" : "neutral";
@@ -661,7 +860,7 @@ function consume(recipe) { for (const k of recipe) if (!INGREDIENTS[k].free) S.i
 function baristaTick() {
   const b = shop().staff.barista; if (!b) return;
   if (!R.bJob) {
-    const t = R.tickets.find(t => t.id !== R.sel && !t.barista && !(outageNow() && DRINKS[t.drink].recipe.some(k => POWER_ING.includes(k))));
+    const t = R.tickets.find(t => t.id !== R.sel && !t.barista && !(outageNow() && powerDrink(t.drink)));
     if (t) {
       if (!hasStock(DRINKS[t.drink].recipe)) {
         if (!R.today.shortage.active) { R.today.shortage.active = true; toast(`☕ ${b.name}: "Chị ơi, hết nguyên liệu làm ${DRINKS[t.drink].name} rồi!"`, "bad"); }
@@ -693,7 +892,7 @@ function simTick(i) {
     consume(d.recipe);
     const q = baristaQuality(b);
     const price = d.price * (LOCATIONS[sh.loc].specialty === id ? 1.2 : 1);
-    let tipRate = { perfect: 0.15, good: 0.06, ok: 0 }[q] + (sh.decor.cay_xanh ? 0.05 : 0) + (sh.staff.cashier ? 0.1 : 0) + (hasTrait(sh, "duyen") ? 0.05 : 0) + ((R.event && R.event.tip) || 0);
+    let tipRate = { perfect: 0.15, good: 0.06, ok: 0 }[q] + (S.tipLoc[sh.loc] || 0) + (sh.decor.cay_xanh ? 0.05 : 0) + (sh.staff.cashier ? 0.1 : 0) + (hasTrait(sh, "duyen") ? 0.05 : 0) + ((R.event && R.event.tip) || 0);
     if (!sh.staff.cleaner) tipRate *= 0.6;
     const pay = Math.round(price * (q === "ok" ? 0.7 : 1) / 1000) * 1000, tip = Math.round(price * tipRate / 1000) * 1000;
     S.money += pay + tip; S.totals.earned += pay + tip;
@@ -731,7 +930,7 @@ function renderStaff() {
   const sh = shop();
   const put = (look, x, tag, cls, busy) => {
     const s = el("div", "staff " + (cls || "") + (busy ? " busy" : ""));
-    s.style.left = x + "px"; s.style.top = "128px";
+    s.style.left = x + "px"; s.style.top = 128 + R.E + "px";
     s.innerHTML = Art.person(look, "happy") + `<div class="tag">${tag}</div><div class="work">☕</div>`;
     layer.appendChild(s);
   };
@@ -746,6 +945,7 @@ function renderStaff() {
 // ---------- Kết thúc ngày ----------
 function endDay() {
   R.phase = "report";
+  clearSurprises(); musicSuspend(false);
   closeDialog();
   const rows = [];
   let net = 0;
@@ -790,6 +990,7 @@ function endDay() {
 
 // ---------- Thành tựu ----------
 function checkAchv() {
+  checkSouvenirs();
   for (const a of ACHIEVEMENTS) if (!S.achv[a.id] && a.test(S)) { S.achv[a.id] = S.day; toast(`🏆 Thành tựu mới: ${a.name}`, "gold"); Sound.sfx("perfect"); }
 }
 
@@ -797,7 +998,7 @@ function checkAchv() {
 function buildScene() {
   const sh = shop();
   document.documentElement.style.setProperty("--accent", loc(sh).accent);
-  $("#scene-bg").innerHTML = Art.sceneBg(sh.loc, sh.decor);
+  $("#scene-bg").innerHTML = Art.sceneBg(sh.loc, sh.decor, R.E);
   $("#counter").innerHTML = Art.counter(sh.loc);
   $("#customers").innerHTML = "";
   for (const c of R.customers) if (c.el) $("#customers").appendChild(c.el);
@@ -826,10 +1027,13 @@ function renderTickets() {
     const c = R.customers.find(x => x.uid === t.id); if (!c) continue;
     const d = el("div", "ticket" + (t.id === R.sel ? " sel" : "") + (t.barista ? " barista" : ""));
     d.dataset.id = t.id;
-    d.innerHTML = `${t.barista ? '<span class="t-badge">☕</span>' : c.reg ? '<span class="t-badge">💖</span>' : c.critic ? '<span class="t-badge">📝</span>' : ""}
+    const noPower = outageNow() && powerDrink(t.drink);
+    const multi = c.items && c.items.length > 1 ? `<span class="t-multi">Ly ${c.idx + 1}/${c.items.length}</span>` : "";
+    d.innerHTML = `${noPower ? '<span class="t-badge">⚡</span>' : t.barista ? '<span class="t-badge">☕</span>' : c.reg ? '<span class="t-badge">💖</span>' : c.critic ? '<span class="t-badge">📝</span>' : ""}${multi}
       <div class="t-cup">${Art.drinkIcon(t.drink)}</div><div class="t-name">${DRINKS[t.drink].name}</div>
-      <div class="t-who">${t.barista ? "Pha chế đang làm" : c.name}</div><div class="pbar"><div></div></div>`;
-    d.addEventListener("click", () => { if (t.barista) return; R.sel = t.id; Sound.sfx("click"); renderTickets(); renderBench(); });
+      <div class="t-who">${t.barista ? "Pha chế đang làm" : noPower ? "Cúp điện — bấm để đổi món" : c.name}</div><div class="pbar"><div></div></div>`;
+    if (noPower) d.classList.add("nopower");
+    d.addEventListener("click", () => { if (t.barista) return; if (noPower) return offerSwap(c, t); R.sel = t.id; Sound.sfx("click"); renderTickets(); renderBench(); });
     box.appendChild(d);
   }
   updateBars();
@@ -947,7 +1151,7 @@ function showIntro() {
   const step = () => {
     if (i >= INTRO.length) { S.introDone = true; showTutorial(); return; }
     const L = INTRO[i++];
-    const body = openModal(L.who === "ngoai" ? "📜 Lá thư của Ngoại" : "🌸 Bảo Uyên", `
+    const body = openModal(L.who === "ngoai" ? "👵 Ngoại dặn dò" : "🌸 Bảo Uyên", `
       <div class="intro-wrap"><div class="portrait">${Art.person(L.who === "ngoai" ? Art.NGOAI : Art.UYEN, "happy")}</div>
       <div class="intro-text">${L.text}<div style="margin-top:20px"><button class="btn big" id="i-next">${i < INTRO.length ? "▶ Tiếp" : "☕ Mở cửa hàng!"}</button></div></div></div>`, { noClose: true });
     $("#i-next").onclick = () => { Sound.sfx("click"); step(); };
@@ -1149,7 +1353,7 @@ const PANELS = {
   menu() {
     const drinks = Object.keys(DRINKS).map(id => {
       const d = DRINKS[id], ok = drinkAvail(id);
-      if (d.secret && !S.secrets[id]) return `<div class="card locked"><h4>❓ Công thức bí mật</h4><div class="sub">Một khách quen sẽ truyền dạy khi đủ thân thiết.</div></div>`;
+      if (d.secret && !S.secrets[id]) return `<div class="card locked"><h4>❓ Công thức bí mật</h4><div class="sub">Một khách ruột sẽ truyền dạy khi đủ thân thiết.</div></div>`;
       const spec = Object.values(LOCATIONS).filter(L => L.specialty === id).map(L => L.city);
       return `<div class="card ${ok ? "" : "locked"}"><div class="row"><div style="width:60px;height:60px">${Art.drinkIcon(id)}</div><div><h4>${d.name}</h4><div class="sub">${money(d.price)} · ${d.hot ? "♨️ nóng" : "🧊 lạnh"}${spec.length ? " · Đặc sản " + spec.join(", ") : ""}</div></div></div>
         <div style="margin-top:6px">${d.recipe.map(k => `<span class="pill">${INGREDIENTS[k].icon} ${INGREDIENTS[k].name}</span>`).join(" → ")}</div>
@@ -1256,7 +1460,7 @@ const PANELS = {
       R.today.purchases += L.cost;
       R.cands[idx] = {}; ROLE_ORDER.forEach(r => R.cands[idx][r] = [genCandidate(r), genCandidate(r), genCandidate(r)]);
       S.active = idx;
-      toast(`🎊 Khai trương ${L.city}! Khách quen mới đang chờ Uyên ở đây.`, "gold"); Sound.sfx("day");
+      toast(`🎊 Khai trương ${L.city}! Khách ruột mới đang chờ Uyên ở đây.`, "gold"); Sound.sfx("day");
       checkAchv(); buildScene(); renderAll(); save(true); showPrepare();
     });
   },
@@ -1272,9 +1476,84 @@ const PANELS = {
         <div class="sub">Câu chuyện: ${ch.story.map((s, k) => k < cs.story ? "📖" : "🔒").join(" ")} · Ghé ${cs.visits} lần</div></div>`;
     }).join("");
     const met = Object.values(S.chars).filter(c => c.met).length;
-    openModal(`💞 Sổ tay khách quen (${met}/${CHARACTERS.length})`, `<p class="sub">Trò chuyện và pha đúng món yêu thích để tăng tim. Đạt 1, 3, 5 tim sẽ mở khóa câu chuyện và quà (khách hiện 💖). Mở quán ở thành phố mới để gặp khách quen mới!</p><div class="grid">${cards}</div>`, { panel: "album" });
+    openModal(`💞 Sổ tay khách ruột (${met}/${CHARACTERS.length})`, `<p class="sub">Trò chuyện và pha đúng món yêu thích để tăng tim. Đạt 1, 3, 5 tim sẽ mở khóa câu chuyện và quà (khách hiện 💖). Mở quán ở thành phố mới để gặp khách ruột mới!</p><div class="grid">${cards}</div>`, { panel: "album" });
   },
   report() { showReport(S.lastReport, false); },
+  music(lastQuery) {
+    const cur = S.settings.musicPreset || "auto";
+    const presets = Object.keys(MUSIC_PRESETS).map(id => {
+      const P = MUSIC_PRESETS[id], on = !Music.ytId && S.settings.musicOn && cur === id;
+      return `<div class="card ${on ? "owned" : ""}" style="cursor:pointer" data-preset="${id}"><h4>${P.icon} ${P.name}</h4><div class="sub">${P.desc}</div></div>`;
+    }).join("");
+    const key = ytKey();
+    const results = Music.results.map((v, k) => `<div class="card yt-card" data-yt="${k}"><img src="${v.thumb}" alt="" loading="lazy"><div><b>${v.title}</b><div class="sub">${v.ch}</div></div></div>`).join("");
+    const now = Music.ytId ? `▶ YouTube: <b>${Music.ytTitle}</b>` : S.settings.musicOn ? `${MUSIC_PRESETS[cur].icon} <b>${MUSIC_PRESETS[cur].name}</b>` : "🔇 Đang tắt nhạc";
+    const body = openModal("📺 TV của quán — chọn nhạc", `
+      <p class="sub">Trong lúc chọn nhạc, quán tạm ngưng đón khách. Đóng bảng này để quán hoạt động tiếp.</p>
+      <div class="row"><span class="pill green">Đang phát: ${now}</span>
+        ${Music.ytId ? '<button class="btn gray" id="m-stopyt">⏹ Dừng YouTube</button>' : ""}
+        <button class="btn gray" id="m-mute">${S.settings.musicOn || Music.ytId ? "🔇 Tắt nhạc" : "🔊 Bật nhạc"}</button>
+        <span class="spacer"></span>🔉 <input type="range" id="m-vol" min="0" max="1" step="0.05" value="${S.settings.music}"></div>
+      <h3>🎷 Nhạc của quán</h3><div class="grid">${presets}</div>
+      <h3>▶ Tìm nhạc YouTube</h3>
+      <div class="row"><input id="m-q" class="txt" placeholder="Ví dụ: nhạc Trịnh jazz, lofi cà phê..." value="${(lastQuery || "").replace(/"/g, "&quot;")}"><button class="btn teal" id="m-search">🔎 Tìm</button></div>
+      <div class="row" style="margin-top:6px">${YT_SUGGEST.map(q => `<button class="pill qchip" data-q="${q}">${q}</button>`).join("")}</div>
+      ${key ? "" : `<p class="sub">Để tìm kiếm ngay trong game, cần một YouTube API key miễn phí (xem mục bên dưới). Chưa có key thì bấm “🔎 Tìm” để mở YouTube, chép link video rồi dán vào ô bên dưới.</p>`}
+      <div class="grid" style="margin-top:8px">${results}</div>
+      <div class="row" style="margin-top:10px"><input id="m-link" class="txt" placeholder="Dán link video YouTube vào đây"><button class="btn" id="m-play">▶ Phát trên TV</button></div>
+      <details style="margin-top:12px"><summary class="sub">⚙️ Thiết lập tìm kiếm trong game (YouTube API key)</summary>
+        <p class="sub">Tạo key miễn phí tại Google Cloud Console → bật “YouTube Data API v3” → Credentials → API key. Key chỉ lưu trên thiết bị này, không nằm trong file save.</p>
+        <div class="row"><input id="m-key" class="txt" type="password" placeholder="Dán API key" value="${key ? "••••••••" : ""}"><button class="btn gray" id="m-savekey">Lưu key</button>${key ? '<button class="btn gray" id="m-delkey">Xóa key</button>' : ""}</div>
+      </details>`, { panel: "music" });
+    on(body, "[data-preset]", "click", c => {
+      S.settings.musicPreset = c.dataset.preset; S.settings.musicOn = true;
+      if (Music.ytId) stopYT();
+      Sound.setPreset(S.settings.musicPreset); startMusic(); applySettings();
+      PANELS.music(lastQuery);
+    });
+    const doSearch = async q => {
+      q = (q || "").trim(); if (!q) return;
+      if (!ytKey()) { window.open("https://www.youtube.com/results?search_query=" + encodeURIComponent(q), "_blank"); return; }
+      $("#m-search").disabled = true; $("#m-search").textContent = "⏳";
+      try { Music.results = await searchYT(q); if (!Music.results.length) toast("Không tìm thấy video nào", "bad"); }
+      catch (e) { toast("Tìm kiếm thất bại — kiểm tra API key hoặc mạng.", "bad"); }
+      if ($("#modal").dataset.panel === "music") PANELS.music(q);
+    };
+    $("#m-search").onclick = () => doSearch($("#m-q").value);
+    $("#m-q").onkeydown = e => { if (e.key === "Enter") doSearch($("#m-q").value); };
+    on(body, ".qchip", "click", b => { $("#m-q").value = b.dataset.q; doSearch(b.dataset.q); });
+    on(body, "[data-yt]", "click", c => { const v = Music.results[+c.dataset.yt]; playYT(v.id, v.title); PANELS.music(lastQuery); });
+    $("#m-play").onclick = () => { const id = ytIdFrom($("#m-link").value); if (!id) { toast("Link YouTube không hợp lệ", "bad"); return; } playYT(id, "Video YouTube"); PANELS.music(lastQuery); };
+    $("#m-mute").onclick = () => {
+      if (S.settings.musicOn || Music.ytId) { if (Music.ytId) stopYT(); S.settings.musicOn = false; Sound.stop(); }
+      else { S.settings.musicOn = true; startMusic(); }
+      applySettings(); PANELS.music(lastQuery);
+    };
+    const sy = $("#m-stopyt"); if (sy) sy.onclick = () => { stopYT(); PANELS.music(lastQuery); };
+    $("#m-vol").oninput = e => { S.settings.music = +e.target.value; applySettings(); };
+    $("#m-savekey").onclick = () => { const v = $("#m-key").value.trim(); if (!v || v.startsWith("•")) return; try { localStorage.setItem(YT_KEY, v); } catch (e) {} toast("🔑 Đã lưu key trên thiết bị này"); PANELS.music(lastQuery); };
+    const dk = $("#m-delkey"); if (dk) dk.onclick = () => { try { localStorage.removeItem(YT_KEY); } catch (e) {} Music.results = []; PANELS.music(lastQuery); };
+  },
+  collect() {
+    const got = Object.keys(ITEMS).filter(k => S.items[k]).length;
+    const sections = SET_ORDER.map(set => {
+      const Z = ITEM_SETS[set], ids = setItems(set), have = ids.filter(k => S.items[k]).length;
+      const where = set === "global" ? "Khắp nơi" : LOCATIONS[set].city;
+      const cards = ids.map(k => {
+        const I = ITEMS[k];
+        if (S.items[k]) {
+          const who = I.from ? CHARACTERS.find(c => c.id === I.from).name : I.souvenir ? "Quà lưu niệm" : "Ngoại";
+          return `<div class="card item owned"><div class="item-ic">${I.icon}</div><div><h4>${I.name}</h4><div class="sub">${I.desc}</div><div class="sub">Từ: <b>${who}</b> · ngày ${S.items[k]}</div></div></div>`;
+        }
+        const hint = I.from ? "Nghe hết câu chuyện của một khách ruột ở " + where : "Uy tín quán " + where + " đạt 60";
+        return `<div class="card item locked"><div class="item-ic">❔</div><div><h4>???</h4><div class="sub">${hint}</div></div></div>`;
+      }).join("");
+      return `<h3>${S.setsDone[set] ? "🏅" : "📦"} ${Z.name} <span class="sub">(${where} · ${have}/${ids.length})</span></h3>
+        <div class="sub">Phần thưởng khi đủ bộ: ${Z.desc} ${S.setsDone[set] ? '<span class="pill green">Đã nhận</span>' : ""}</div>
+        <div class="grid" style="margin-top:6px">${cards}</div>`;
+    }).join("");
+    openModal(`📚 Sổ sưu tập kỷ vật (${got}/${Object.keys(ITEMS).length})`, `<p class="sub">Khi một khách ruột kể hết câu chuyện đời mình (đủ 5 tim), họ sẽ trao cho Uyên một kỷ vật. Gom đủ kỷ vật của một vùng để nhận thưởng. Đủ tất cả các bộ... sẽ có người đặc biệt ghé thăm.</p>${sections}`, { panel: "collect" });
+  },
   achv() {
     const n = Object.keys(S.achv).length;
     openModal(`🏆 Thành tựu (${n}/${ACHIEVEMENTS.length})`, `<div class="grid">${ACHIEVEMENTS.map(a => `<div class="card ${S.achv[a.id] ? "owned" : "locked"}"><h4>${S.achv[a.id] ? "🏆" : "🔒"} ${a.name}</h4><div class="sub">${a.desc}${S.achv[a.id] ? ` · ngày ${S.achv[a.id]}` : ""}</div></div>`).join("")}</div>`, { panel: "achv" });
@@ -1350,8 +1629,92 @@ function importSave() {
   };
   inp.click();
 }
-function applySettings() { if (!S) return; Sound.setMusicVol(S.settings.musicOn ? S.settings.music : 0); Sound.setSfxVol(S.settings.sfx); $("#btn-music").classList.toggle("off", !S.settings.musicOn); }
-function startMusic() { Sound.init(); if (!S || S.settings.musicOn) { Sound.start(); applySettings(); } }
+function applySettings() {
+  if (!S) return;
+  Sound.setMusicVol(S.settings.musicOn ? S.settings.music : 0); Sound.setSfxVol(S.settings.sfx);
+  Sound.setPreset(S.settings.musicPreset || "auto");
+  if (Music.yt && Music.yt.setVolume) Music.yt.setVolume(Math.round(S.settings.music * 100));
+  $("#btn-music").classList.toggle("off", !S.settings.musicOn);
+  updateTv();
+}
+function startMusic() {
+  Sound.init();
+  if (Music.ytId || Music.suspended) return;
+  if (!S || S.settings.musicOn) { Sound.start(); applySettings(); }
+}
+
+// ---------- TV: đổi nhạc & YouTube ----------
+const Music = { yt: null, ytId: null, ytTitle: "", suspended: false, results: [] };
+const YT_KEY = "chnu_ytkey";
+const ytKey = () => { try { return localStorage.getItem(YT_KEY) || ""; } catch (e) { return ""; } };
+function updateTv() {
+  const tv = $("#tv"); if (!tv) return;
+  const off = Music.suspended || (!Music.ytId && (!S || !S.settings.musicOn));
+  tv.classList.toggle("off", off);
+  tv.classList.toggle("yt", !!Music.ytId && !Music.suspended);
+  const P = MUSIC_PRESETS[(S && S.settings.musicPreset) || "auto"];
+  $("#tv-label").textContent = Music.suspended ? "" : Music.ytId ? "▶ " + Music.ytTitle : off ? "📺" : P.icon + " " + P.name;
+}
+function musicSuspend(on) {
+  Music.suspended = on;
+  if (on) { Sound.stop(); if (Music.yt && Music.yt.pauseVideo) Music.yt.pauseVideo(); }
+  else if (Music.ytId && Music.yt && Music.yt.playVideo) Music.yt.playVideo();
+  else if (S && S.settings.musicOn) startMusic();
+  updateTv();
+}
+function loadYT(cb) {
+  if (window.YT && window.YT.Player) return cb();
+  const prev = window.onYouTubeIframeAPIReady;
+  window.onYouTubeIframeAPIReady = () => { if (prev) prev(); cb(); };
+  if (!document.querySelector('script[src*="youtube.com/iframe_api"]')) {
+    const sc = el("script"); sc.src = "https://www.youtube.com/iframe_api";
+    sc.onerror = () => toast("Không tải được YouTube — kiểm tra kết nối mạng.", "bad");
+    document.head.appendChild(sc);
+  }
+}
+function ytIdFrom(text) {
+  text = (text || "").trim();
+  const m = text.match(/(?:v=|youtu\.be\/|shorts\/|embed\/|live\/)([\w-]{11})/);
+  if (m) return m[1];
+  return /^[\w-]{11}$/.test(text) ? text : null;
+}
+function playYT(id, title) {
+  Music.ytId = id; Music.ytTitle = title || "YouTube";
+  Sound.stop(); updateTv();
+  loadYT(() => {
+    if (!Music.yt) {
+      Music.yt = new YT.Player("yt-player", {
+        width: 160, height: 90, videoId: id,
+        playerVars: { autoplay: 1, playsinline: 1, controls: 0, rel: 0, modestbranding: 1 },
+        events: {
+          onReady: e => { e.target.setVolume(Math.round(S.settings.music * 100)); if (!Music.suspended) e.target.playVideo(); },
+          onStateChange: e => { if (e.data === 1 && Music.ytTitle === "Video YouTube") { const d = e.target.getVideoData(); if (d && d.title) { Music.ytTitle = d.title; updateTv(); } } },
+          onError: e => { Music.lastErr = e.data; toast(`Video này không phát được trong game (mã ${e.data}), chọn video khác nhé.`, "bad"); stopYT(); },
+        },
+      });
+    } else Music.yt.loadVideoById(id);
+  });
+  toast("📺 Đang phát: " + Music.ytTitle);
+}
+function stopYT() {
+  if (Music.yt && Music.yt.stopVideo) Music.yt.stopVideo();
+  Music.ytId = null; updateTv();
+  if (S && S.settings.musicOn) startMusic();
+}
+async function searchYT(q) {
+  const key = ytKey();
+  if (!key) return null;
+  const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoEmbeddable=true&maxResults=9&q=${encodeURIComponent(q)}&key=${encodeURIComponent(key)}`;
+  const r = await fetch(url);
+  if (!r.ok) throw new Error("HTTP " + r.status);
+  const j = await r.json();
+  return (j.items || []).map(it => ({ id: it.id.videoId, title: it.snippet.title.replace(/&#39;/g, "'").replace(/&quot;/g, '"').replace(/&amp;/g, "&"), ch: it.snippet.channelTitle, thumb: it.snippet.thumbnails.medium.url }));
+}
+function openTv() {
+  if (!S || !["open", "prepare"].includes(R.phase)) return;
+  if (R.qte) return;
+  Sound.sfx("click"); closeDialog(); PANELS.music();
+}
 
 // ---------- Sự kiện giao diện ----------
 function bindUI() {
@@ -1364,6 +1727,7 @@ function bindUI() {
   }));
   $("#modal-close").onclick = () => { Sound.sfx("click"); closeModal(); if (R.phase === "prepare") showPrepare(); };
   $("#btn-serve").onclick = serve;
+  $("#tv").addEventListener("click", openTv);
   $("#btn-dump").onclick = () => { if (!R.cup.length) return; R.cup = []; Sound.sfx("pour"); renderBench(); };
   $("#btn-undo").onclick = () => { if (!R.cup.length) return; R.cup.pop(); Sound.sfx("click"); renderBench(); };
   $("#btn-clean").onclick = () => {
@@ -1393,6 +1757,14 @@ function bindUI() {
   // Trình duyệt chỉ cho phát nhạc sau thao tác đầu tiên
   addEventListener("pointerdown", () => { if (S && S.settings.musicOn && !Sound.playing) startMusic(); }, { once: false });
 }
+
+// Hook kiểm thử: chỉ bật khi URL có ?debug
+if (location.search.includes("debug")) window.__dbg = { get S() { return S; }, R, Music, startQte, spawnCustomer, PANELS, giveItem,
+  clear() { R.customers.slice().forEach(c => removeCustomer(c)); closeDialog(); },
+  spawnMulti(n) { for (let k = 0; k < 30; k++) { spawnCustomer(); const c = R.customers[R.customers.length - 1]; if (c && c.items.length >= n) return; if (c) removeCustomer(c); } },
+  spawnReg(id) { const ch = CHARACTERS.find(c => c.id === id); const s0 = freeSlot(); if (s0 < 0) return; if (!S.chars[id]) S.chars[id] = { aff: 0, met: true, chatIdx: 0, story: 0, visits: 0 };
+    const c = { reg: ch, name: ch.name, look: ch.look, drink: pickDrink(S.active, ch.fav), patF: 2, items: null, idx: 0, uid: ++R.uid, slot: s0, state: "walking", wait: 0, chatted: false, tipBonus: 0, maxOrder: 200, maxDrink: 300 };
+    c.items = [c.drink]; c.pat = c.max = 200; mountCustomer(c, "💖 "); } };
 
 // ---------- Khởi động ----------
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(() => {});

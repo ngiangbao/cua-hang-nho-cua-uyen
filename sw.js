@@ -1,6 +1,6 @@
 // Service worker: lưu đệm để game mở được cả khi không có mạng
-const CACHE = "chnu-v1";
-const ASSETS = ["./", "index.html", "css/style.css", "js/data.js", "js/art.js", "js/audio.js", "js/game.js",
+const CACHE = "chnu-v2";
+const ASSETS = ["./", "index.html", "css/style.css", "js/data.js", "js/stories.js", "js/art.js", "js/audio.js", "js/game.js",
   "manifest.webmanifest", "icons/apple-touch-icon.png", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", e => {

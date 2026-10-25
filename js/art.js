@@ -232,7 +232,7 @@ const Art = (() => {
     return "";
   }
 
-  function sceneBg(locId, decor) {
+  function sceneBg(locId, decor, extra = 0) {
     const L = LOCATIONS[locId];
     const wall = L.wall, acc = L.accent;
     const plant = decor.cay_xanh ? `
@@ -240,18 +240,20 @@ const Art = (() => {
       <g><rect x="920" y="250" width="44" height="40" rx="6" fill="#f4a261"/><circle cx="942" cy="234" r="22" fill="#52b788"/><circle cx="930" cy="214" r="6" fill="#ff8fa3"/><circle cx="952" cy="208" r="6" fill="#ffd166"/></g>` : "";
     const neon = decor.bien_neon ? `<text x="500" y="44" text-anchor="middle" class="neon" font-size="30" font-family="Baloo 2, cursive" font-weight="800" fill="#fff" stroke="${acc}" stroke-width="1.5">☕ Cửa hàng nhỏ của Uyên</text>` :
       `<rect x="370" y="14" width="260" height="40" rx="10" fill="#fff8e7" stroke="${acc}" stroke-width="3"/><text x="500" y="42" text-anchor="middle" font-size="22" font-family="Baloo 2, cursive" font-weight="800" fill="${acc}">Cửa hàng nhỏ của Uyên</text>`;
-    const art = decor.tranh ? `<g><rect x="760" y="80" width="120" height="90" rx="6" fill="#fff" stroke="#9c6644" stroke-width="6"/><circle cx="800" cy="115" r="16" fill="#ffd166"/><path d="M770,160 l30,-30 l20,20 l20,-26 l30,36z" fill="${acc}"/></g>` : `<g><rect x="790" y="96" width="70" height="56" rx="4" fill="#fff" stroke="#9c6644" stroke-width="4"/><path d="M800,144 l18,-22 l14,14 l12,-16 l12,24z" fill="${acc}" opacity=".7"/></g>`;
+    // Tranh tường (trang trí) treo bên trái cửa sổ; góc phải dành cho TV
+    const art = decor.tranh ? `<g><rect x="196" y="140" width="92" height="74" rx="6" fill="#fff" stroke="#9c6644" stroke-width="5"/><circle cx="224" cy="166" r="12" fill="#ffd166"/><path d="M204,206 l24,-24 l16,16 l16,-20 l20,28z" fill="${acc}"/></g>` : "";
     const ac = decor.may_lanh ? `<g><rect x="80" y="70" width="110" height="34" rx="8" fill="#f8f9fa" stroke="#adb5bd" stroke-width="2"/><rect x="92" y="94" width="86" height="4" fill="#ced4da"/><circle cx="178" cy="80" r="3" fill="#06d6a0"/></g>` : "";
     const speaker = decor.loa_jazz ? `<g><rect x="230" y="150" width="40" height="60" rx="6" fill="#343a40"/><circle cx="250" cy="170" r="10" fill="#6c757d"/><circle cx="250" cy="196" r="6" fill="#6c757d"/><text x="282" y="160" font-size="20" class="note">♪</text></g>` : "";
     const menu = `<g><rect x="600" y="76" width="150" height="120" rx="8" fill="#2d3a3a" stroke="#9c6644" stroke-width="6"/><text x="675" y="100" text-anchor="middle" fill="#ffd166" font-size="16" font-family="Baloo 2" font-weight="700">THỰC ĐƠN</text>${[0,1,2,3,4].map(i => `<rect x="616" y="${112 + i * 15}" width="${60 + (i * 23) % 50}" height="5" rx="2" fill="#fff" opacity=".7"/><rect x="718" y="${112 + i * 15}" width="18" height="5" rx="2" fill="#ffd166" opacity=".8"/>`).join("")}</g>`;
-    return `<svg class="scene-bg" viewBox="0 0 1000 570" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+    return `<svg class="scene-bg" viewBox="0 0 1000 ${570 + extra}" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
       <defs><clipPath id="win-clip"><rect x="300" y="70" width="280" height="180" rx="10"/></clipPath>
         <pattern id="tiles" width="40" height="40" patternUnits="userSpaceOnUse"><rect width="40" height="40" fill="#f2e2c4"/><rect width="20" height="20" fill="#e8d3ad"/><rect x="20" y="20" width="20" height="20" fill="#e8d3ad"/></pattern>
         <pattern id="stripes" width="30" height="30" patternUnits="userSpaceOnUse"><rect width="30" height="30" fill="${wall}"/><rect width="15" height="30" fill="#fff" opacity=".18"/></pattern></defs>
-      <rect width="1000" height="570" fill="url(#stripes)"/>
-      <rect y="300" width="1000" height="270" fill="url(#tiles)"/>
-      <rect y="294" width="1000" height="10" fill="${acc}" opacity=".6"/>
-      <g transform="translate(0 20)">
+      <rect width="1000" height="${570 + extra}" fill="url(#stripes)"/>
+      <rect y="${300 + extra}" width="1000" height="270" fill="url(#tiles)"/>
+      <rect y="${294 + extra}" width="1000" height="10" fill="${acc}" opacity=".6"/>
+      ${extra > 40 ? bunting(extra, acc) : ""}
+      <g transform="translate(0 ${20 + extra})">
       ${neon}
       <g clip-path="url(#win-clip)"><g transform="translate(300 70) scale(0.934 0.9)">${windowView(locId)}</g></g>
       <rect x="300" y="70" width="280" height="180" rx="10" fill="none" stroke="#9c6644" stroke-width="10"/>
@@ -259,11 +261,23 @@ const Art = (() => {
       <path d="M290,70 Q310,110 300,150 L290,150Z" fill="${acc}" opacity=".85"/><path d="M590,70 Q570,110 580,150 L590,150Z" fill="${acc}" opacity=".85"/>
       ${menu}${art}${ac}${speaker}
       <g><rect x="40" y="120" width="160" height="10" rx="3" fill="#9c6644"/>${[0,1,2,3].map(i => `<rect x="${52 + i * 36}" y="${92 + (i % 2) * 6}" width="22" height="${28 - (i % 2) * 6}" rx="4" fill="${["#e07a5f","#81b29a","#f2cc8f","#3d405b"][i]}"/>`).join("")}</g>
-      <g class="lamp"><line x1="160" y1="0" x2="160" y2="50" stroke="#333" stroke-width="2"/><path d="M140,50 h40 l10,22 h-60z" fill="#ffd166"/><ellipse cx="160" cy="74" rx="40" ry="8" fill="#fff3b0" opacity=".5"/></g>
-      <g class="lamp"><line x1="860" y1="0" x2="860" y2="40" stroke="#333" stroke-width="2"/><path d="M840,40 h40 l10,22 h-60z" fill="#ffd166"/></g>
+      <g class="lamp"><line x1="160" y1="-400" x2="160" y2="50" stroke="#333" stroke-width="2"/><path d="M140,50 h40 l10,22 h-60z" fill="#ffd166"/><ellipse cx="160" cy="74" rx="40" ry="8" fill="#fff3b0" opacity=".5"/></g>
+      <g class="lamp"><line x1="960" y1="-400" x2="960" y2="40" stroke="#333" stroke-width="2"/><path d="M940,40 h40 l10,22 h-60z" fill="#ffd166"/></g>
       ${plant}
       </g>
     </svg>`;
+  }
+
+  // Dây đèn và cờ trang trí cho phần tường cao hơn (màn hình iPad)
+  function bunting(extra, acc) {
+    const y = Math.min(extra * 0.45, 70);
+    const cols = ["#ef476f", "#ffd166", "#06d6a0", "#118ab2", acc];
+    let g = `<path d="M0,${y} Q250,${y + 40} 500,${y} T1000,${y}" stroke="#7f5539" stroke-width="2" fill="none"/>`;
+    for (let i = 0; i < 20; i++) {
+      const x = 25 + i * 50, yy = y + Math.sin((x / 1000) * Math.PI * 2) * 18 + 6;
+      g += i % 2 ? `<circle cx="${x}" cy="${yy + 4}" r="7" fill="#fff3b0" class="bulb" style="animation-delay:${i * 0.15}s"/>` : `<path d="M${x - 12},${yy} h24 l-12,22z" fill="${cols[i / 2 % cols.length]}"/>`;
+    }
+    return g;
   }
 
   function counter(locId) {
