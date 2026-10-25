@@ -28,6 +28,16 @@ const INGREDIENTS = {
   tran_chau: { name: "Trân châu",    icon: "⚫", color: "#2d1b10", cost: 3000, equip: "noi_tran_chau" },
   matcha:    { name: "Matcha",       icon: "🍃", color: "#7fb347", cost: 8000, equip: "may_espresso" },
   dau:       { name: "Dâu Đà Lạt",   icon: "🍓", color: "#ff4d6d", cost: 7000, secret: "tra_dau" },
+  // Đặc sản địa phương — chỉ nhập được ở quán thuộc thành phố đó
+  com:       { name: "Cốm làng Vòng", icon: "🌾", color: "#b5d67a", cost: 5000, only: ["hanoi"] },
+  sen:       { name: "Hoa sen",       icon: "🪷", color: "#ffd6e0", cost: 6000, only: ["hanoi", "hue"] },
+  tac:       { name: "Tắc",           icon: "🟠", color: "#ffb703", cost: 1500, only: ["saigon"] },
+  rau_ma:    { name: "Rau má",        icon: "🥬", color: "#74c69d", cost: 3000, only: ["saigon"] },
+  dau_nanh:  { name: "Đậu nành",      icon: "🫘", color: "#f1e3c8", cost: 2500, only: ["dalat"] },
+  atiso:     { name: "Atiso",         icon: "🌺", color: "#7a9e7e", cost: 5000, only: ["dalat"] },
+  la_dua:    { name: "Lá dứa",        icon: "🌴", color: "#52b788", cost: 2000, only: ["hoian"] },
+  dua_tuoi:  { name: "Dừa tươi",      icon: "🥥", color: "#f6fff0", cost: 8000, only: ["danang"] },
+  ky_tu:     { name: "Kỷ tử",         icon: "🔴", color: "#e63946", cost: 4000, only: ["hue"] },
 };
 
 // ---------- Đồ uống ----------
@@ -39,7 +49,7 @@ const DRINKS = {
   bac_xiu:      { name: "Bạc xỉu",           price: 32000, recipe: ["sua_dac", "sua_tuoi", "phin", "da"], hot: false },
   tra_chanh:    { name: "Trà chanh",         price: 20000, recipe: ["tra", "chanh", "duong", "da"], hot: false },
   ca_cao_nong:  { name: "Ca cao nóng",       price: 35000, recipe: ["cacao", "nuoc_nong", "sua_dac"], hot: true },
-  nuoc_mot:     { name: "Nước mót Hội An",   price: 30000, recipe: ["tra", "sa", "chanh", "da"], hot: false },
+  nuoc_mot:     { name: "Nước mót Hội An",   price: 30000, recipe: ["tra", "sa", "chanh", "da"], hot: false, only: "hoian" },
   ca_phe_trung: { name: "Cà phê trứng",      price: 45000, recipe: ["phin", "trung"], hot: true, equip: "may_danh_trung" },
   ca_phe_muoi:  { name: "Cà phê muối",       price: 39000, recipe: ["sua_dac", "phin", "da", "muoi"], hot: false, equip: "may_danh_trung" },
   ca_phe_dua:   { name: "Cà phê cốt dừa",    price: 45000, recipe: ["phin", "dua", "sua_dac", "da"], hot: false, equip: "bo_cot_dua" },
@@ -53,13 +63,25 @@ const DRINKS = {
   latte:        { name: "Latte",             price: 55000, recipe: ["espresso", "sua_tuoi", "foam"], hot: true, equip: "may_espresso" },
   cappuccino:   { name: "Cappuccino",        price: 55000, recipe: ["espresso", "foam", "cacao"], hot: true, equip: "may_espresso" },
   matcha_latte: { name: "Matcha latte đá",   price: 55000, recipe: ["matcha", "sua_tuoi", "da"], hot: false, equip: "may_espresso" },
+  // Món địa phương — chỉ bán ở quán thuộc thành phố đó
+  cf_com:       { name: "Cà phê cốm",        price: 45000, recipe: ["phin", "sua_tuoi", "com", "da"], hot: false, only: "hanoi" },
+  tra_sen:      { name: "Trà sen Tây Hồ",    price: 40000, recipe: ["tra", "sen", "nuoc_nong"], hot: true, only: "hanoi" },
+  tra_tac:      { name: "Trà tắc",           price: 25000, recipe: ["tra", "tac", "duong", "da"], hot: false, only: "saigon" },
+  rau_ma_dx:    { name: "Rau má sữa",        price: 30000, recipe: ["rau_ma", "sua_dac", "da"], hot: false, only: "saigon" },
+  sua_dau_nanh: { name: "Sữa đậu nành nóng", price: 20000, recipe: ["dau_nanh", "duong", "nuoc_nong"], hot: true, only: "dalat" },
+  tra_atiso:    { name: "Trà atiso",         price: 30000, recipe: ["atiso", "duong", "nuoc_nong"], hot: true, only: "dalat" },
+  tra_la_dua:   { name: "Trà lá dứa",        price: 30000, recipe: ["tra", "la_dua", "duong", "da"], hot: false, only: "hoian" },
+  nuoc_dua:     { name: "Nước dừa Mỹ Khê",   price: 35000, recipe: ["dua_tuoi", "da"], hot: false, only: "danang" },
+  dua_dam:      { name: "Dừa dầm",           price: 40000, recipe: ["dua_tuoi", "sua_dac", "da"], hot: false, only: "danang" },
+  tra_cung_dinh:{ name: "Trà cung đình Huế", price: 45000, recipe: ["tra", "ky_tu", "sen", "nuoc_nong"], hot: true, only: "hue" },
+  sua_sen:      { name: "Sữa sen Huế",       price: 40000, recipe: ["sen", "sua_tuoi", "duong", "da"], hot: false, only: "hue" },
   // Công thức bí mật — mở khóa qua câu chuyện khách ruột
   jazz_latte:   { name: "Latte Jazz Đêm",    price: 65000, recipe: ["espresso", "sua_dac", "sua_tuoi", "foam", "cacao"], hot: true, equip: "may_espresso", secret: true },
   cf_cu_hoa:    { name: "Cà phê Cụ Hòa",     price: 60000, recipe: ["phin", "trung", "cacao"], hot: true, equip: "may_danh_trung", secret: true },
   tra_dau:      { name: "Trà dâu Đà Lạt",    price: 55000, recipe: ["tra", "dau", "duong", "da"], hot: false, secret: true },
 };
 
-// ---------- Máy móc (dùng chung toàn chuỗi) ----------
+// ---------- Máy móc (mỗi quán mua riêng) ----------
 const EQUIPMENT = {
   may_danh_trung: { name: "Máy đánh kem trứng", price: 800000,  desc: "Mở khóa Cà phê trứng, Cà phê muối" },
   tu_mat:         { name: "Tủ mát trái cây",    price: 900000,  desc: "Mở khóa Trà đào, Trà vải, Sữa chua cà phê" },
@@ -83,18 +105,33 @@ const DECOR = {
 const LOCATIONS = {
   hanoi:  { name: "Hẻm Phố Cổ", city: "Hà Nội",  cost: 0,        rent: 150000, flow: 1.0, specialty: "ca_phe_trung", key: 5,  tempo: 92,
             wall: "#ffe6b8", accent: "#e07a5f", desc: "Căn quán nhỏ ngoại nhượng lại, cửa sổ nhìn ra mái ngói rêu phong." },
-  saigon: { name: "Góc Quận 1", city: "Sài Gòn", cost: 8000000,  rent: 320000, flow: 1.45, specialty: "bac_xiu", key: 10, tempo: 108,
+  saigon: { name: "Góc Quận 1", city: "Sài Gòn", cost: 15000000, rent: 320000, flow: 1.45, specialty: "bac_xiu", key: 10, tempo: 108,
             wall: "#d9f2ef", accent: "#2a9d8f", desc: "Sôi động, đông khách văn phòng, thèm đồ đá quanh năm." },
-  dalat:  { name: "Đồi Thông", city: "Đà Lạt",   cost: 14000000, rent: 200000, flow: 1.15, specialty: "ca_cao_nong", key: 3,  tempo: 80,
+  dalat:  { name: "Đồi Thông", city: "Đà Lạt",   cost: 25000000, rent: 200000, flow: 1.15, specialty: "ca_cao_nong", key: 3,  tempo: 80,
             wall: "#e8e1f5", accent: "#7b6cc4", desc: "Se lạnh, sương mù, khách thích đồ nóng." },
-  hoian:  { name: "Phố Đèn Lồng", city: "Hội An", cost: 22000000, rent: 260000, flow: 1.35, specialty: "nuoc_mot", key: 7, tempo: 90,
+  hoian:  { name: "Phố Đèn Lồng", city: "Hội An", cost: 40000000, rent: 260000, flow: 1.35, specialty: "nuoc_mot", key: 7, tempo: 90,
             wall: "#fff1a8", accent: "#e9a23b", desc: "Du khách khắp nơi, tường vàng, đèn lồng rực rỡ." },
-  danang: { name: "Bờ Biển Mỹ Khê", city: "Đà Nẵng", cost: 32000000, rent: 300000, flow: 1.5, specialty: "ca_phe_dua", key: 0, tempo: 112,
+  danang: { name: "Bờ Biển Mỹ Khê", city: "Đà Nẵng", cost: 55000000, rent: 300000, flow: 1.5, specialty: "ca_phe_dua", key: 0, tempo: 112,
             wall: "#d4f1ff", accent: "#1d8fd8", desc: "Nắng gió biển, khách mê đồ mát." },
-  hue:    { name: "Bên Sông Hương", city: "Huế",  cost: 45000000, rent: 230000, flow: 1.25, specialty: "ca_phe_muoi", key: 8, tempo: 76,
+  hue:    { name: "Bên Sông Hương", city: "Huế",  cost: 75000000, rent: 230000, flow: 1.25, specialty: "ca_phe_muoi", key: 8, tempo: 76,
             wall: "#f1e0f5", accent: "#9b5de5", desc: "Trầm mặc, thơ mộng, quê hương cà phê muối." },
 };
 const LOCATION_ORDER = ["hanoi", "saigon", "dalat", "hoian", "danang", "hue"];
+const MIN_DAYS_BETWEEN_SHOPS = 10;
+// Tọa độ thật (kinh độ, vĩ độ) để đặt quán trên bản đồ
+const GEO = {
+  hanoi: [105.85, 21.03], saigon: [106.70, 10.78], dalat: [108.44, 11.94],
+  hoian: [108.33, 15.88], danang: [108.20, 16.05], hue: [107.59, 16.46],
+};
+// Đường viền Việt Nam (giản lược) theo kinh độ, vĩ độ
+const VN_OUTLINE = [[102.14,22.4],[102.6,22.75],[103.3,22.8],[103.95,22.5],[104.4,22.8],[105.3,23.3],[106.2,22.98],[106.7,22.85],[107.4,22.2],[108.05,21.55],
+  [107.4,21.2],[106.7,20.7],[106.2,20.2],[105.9,19.6],[105.7,18.9],[106.1,18.3],[106.5,17.8],[107.1,17.1],[107.6,16.5],[108.2,16.1],[108.4,15.6],[108.8,15.2],
+  [109.0,14.5],[109.2,13.8],[109.3,13.0],[109.2,12.3],[109.15,11.8],[108.8,11.3],[108.0,10.7],[107.2,10.4],[106.8,10.3],[106.5,9.7],[105.8,9.0],[105.2,8.6],
+  [104.8,8.6],[104.8,9.5],[104.9,10.2],[104.5,10.4],[105.1,10.9],[106.2,10.95],[106.4,11.6],[107.5,12.3],[107.6,13.0],[107.5,14.0],[107.7,14.6],[107.3,15.4],
+  [107.4,16.2],[106.8,16.5],[106.5,17.0],[106.0,17.5],[105.6,18.0],[105.1,18.6],[104.4,19.0],[104.0,19.4],[104.6,19.8],[104.5,20.2],[104.0,20.5],[103.3,20.7],
+  [103.0,21.2],[102.4,21.9]];
+// Kho khởi đầu của mỗi quán mới mở
+const STARTER_INV = { phin: 30, sua_dac: 25, sua_tuoi: 20, duong: 30, tra: 20, chanh: 15, sa: 10, cacao: 10 };
 
 // ---------- Nhân viên ----------
 const ROLES = {
@@ -104,12 +141,28 @@ const ROLES = {
   barista: { name: "Pha chế",  icon: "☕",   wage: [200000, 320000], desc: "Tự pha đồ uống. Quán có pha chế có thể tự vận hành khi Uyên sang quán khác." },
 };
 const ROLE_ORDER = ["waiter", "cleaner", "cashier", "barista"];
-const TRAITS = [
-  { id: "cham",  name: "Chăm chỉ",  desc: "Làm nhanh hơn" },
-  { id: "duyen", name: "Duyên dáng", desc: "Khách tip nhiều hơn" },
-  { id: "can",   name: "Cẩn thận",  desc: "Ít sai sót" },
-  { id: "vui",   name: "Vui tính",  desc: "Khách kiên nhẫn hơn" },
-];
+// Ưu điểm và nhược điểm ngẫu nhiên của ứng viên. eff: hiệu ứng (speed, quality, tip, patience, flow, rep, save, waste, absent)
+const PERKS = {
+  nhanh:    { name: "Nhanh nhẹn",         icon: "⚡", desc: "Làm việc nhanh hơn 20%", eff: { speed: 0.2 } },
+  taynghe:  { name: "Tay nghề cao",       icon: "🎯", desc: "+10% cơ hội pha ly hoàn hảo", eff: { quality: 0.1 } },
+  duyen:    { name: "Duyên dáng",         icon: "💖", desc: "Khách tip thêm 8%", eff: { tip: 0.08 } },
+  thanthien:{ name: "Thân thiện",         icon: "😊", desc: "Khách kiên nhẫn hơn 12%", eff: { patience: 0.12 } },
+  noitieng: { name: "Nổi tiếng trên mạng", icon: "📱", desc: "+6% lượng khách tới quán", eff: { flow: 0.06 } },
+  kytinh:   { name: "Kỹ tính",            icon: "✨", desc: "Uy tín quán tăng nhanh hơn 15%", eff: { rep: 0.15 } },
+  tietkiem: { name: "Tiết kiệm",          icon: "🪙", desc: "15% cơ hội pha không tốn nguyên liệu", eff: { save: 0.15 } },
+  banhang:  { name: "Khéo bán hàng",      icon: "💰", desc: "Khách tip thêm 5%, uy tín tăng nhanh hơn 5%", eff: { tip: 0.05, rep: 0.05 } },
+};
+const FLAWS = {
+  chamchap: { name: "Chậm chạp",       icon: "🐢", desc: "Làm việc chậm hơn 15%", eff: { speed: -0.15 } },
+  vungve:   { name: "Vụng về",         icon: "💥", desc: "-10% cơ hội pha ly hoàn hảo", eff: { quality: -0.1 } },
+  haycau:   { name: "Hay cáu",         icon: "😤", desc: "Khách kém kiên nhẫn 10%", eff: { patience: -0.1 } },
+  haynghi:  { name: "Hay xin nghỉ",    icon: "🛌", desc: "10% khả năng vắng mặt mỗi ngày (ngày nghỉ không trả lương)", eff: { absent: 0.1 } },
+  doiluong: { name: "Đòi lương cao",   icon: "💸", desc: "Lương cao hơn 20%", wage: 0.2 },
+  dienthoai:{ name: "Ham điện thoại",  icon: "📵", desc: "Làm chậm hơn 10%, khách tip ít đi 4%", eff: { speed: -0.1, tip: -0.04 } },
+  voy:      { name: "Vô ý",            icon: "🫗", desc: "8% khả năng làm đổ, tốn gấp đôi nguyên liệu", eff: { waste: 0.08 } },
+  laumieng: { name: "Lắm miệng",       icon: "🗣️", desc: "Uy tín tăng chậm hơn 10%", eff: { rep: -0.1 } },
+};
+const REROLL_COST = 50000;
 
 // ---------- Tên ngẫu nhiên ----------
 const HO = ["Nguyễn", "Trần", "Lê", "Phạm", "Hoàng", "Huỳnh", "Phan", "Vũ", "Võ", "Đặng", "Bùi", "Đỗ", "Hồ", "Ngô", "Dương", "Lý"];
@@ -359,7 +412,7 @@ const CHARACTERS = [
     ] },
 
   // ===== Hà Nội =====
-  { id: "cuhoa", name: "Cụ Hòa", title: "Kỳ thủ cờ tướng", loc: "hanoi", day: 1, fav: ["den_nong", "ca_phe_trung"], patience: 1.8, tip: 1.0,
+  { id: "cuhoa", name: "Cụ Hòa", title: "Kỳ thủ cờ tướng", loc: "hanoi", day: 1, fav: ["tra_sen", "den_nong", "ca_phe_trung"], patience: 1.8, tip: 1.0,
     look: { g: "m", age: "old", skin: "#e2b48c", hair: "bald", hc: "#f2f2f2", shirt: "shirt", sc: "#8d6e63", acc: ["beard"] },
     bio: "Tám mươi lăm tuổi, vô địch cờ tướng phố cổ ba mươi năm liền.",
     greet: ["Con bé, có ai đánh với cụ ván cờ không?", "Một ly nóng, đặc vào nhé.", "Phố này đổi nhiều rồi, chỉ quán này là còn giữ hương cũ."],
@@ -381,7 +434,7 @@ const CHARACTERS = [
       { h: 5, lines: ["Cụ thắng giải cờ phường lần thứ ba mươi mốt!", "Cúp này cụ để ở quán con, ai vào cũng thấy."], reward: { rep: 7 } },
     ] },
 
-  { id: "hang", name: "Hằng", title: "Sinh viên Mỹ thuật", loc: "hanoi", day: 2, fav: ["ca_phe_trung", "tra_dao", "tra_chanh"], patience: 1.2, tip: 0.9,
+  { id: "hang", name: "Hằng", title: "Sinh viên Mỹ thuật", loc: "hanoi", day: 2, fav: ["cf_com", "ca_phe_trung", "tra_dao", "tra_chanh"], patience: 1.2, tip: 0.9,
     look: { g: "f", age: "young", skin: "#fde0c5", hair: "bob", hc: "#c0392b", shirt: "tee", sc: "#f4a261", acc: ["beret"] },
     bio: "Vẽ ký họa phố cổ, áo lúc nào cũng dính màu nước.",
     greet: ["Chị Uyên ơi, cho em ngồi vẽ cái cửa sổ quán nha!", "Hôm nay ánh nắng vàng như màu ochre.", "Em hết tiền mua màu rồi... nhưng vẫn phải có cà phê!"],
@@ -470,7 +523,7 @@ const CHARACTERS = [
       { h: 5, lines: ["Công ty em giờ có năm mươi người. Mỗi sáng đặt cà phê từ quán chị.", "Hợp đồng dài hạn, chị ký giúp em nha!"], reward: { flow: 0.05, rep: 4 } },
     ] },
 
-  { id: "vy", name: "Vy", title: "Nhân viên ngân hàng", loc: "saigon", day: 1, fav: ["sua_chua_cf", "tra_vai", "bac_xiu"], patience: 1.0, tip: 1.2,
+  { id: "vy", name: "Vy", title: "Nhân viên ngân hàng", loc: "saigon", day: 1, fav: ["rau_ma_dx", "sua_chua_cf", "tra_vai", "bac_xiu"], patience: 1.0, tip: 1.2,
     look: { g: "f", age: "young", skin: "#fce1cf", hair: "long", hc: "#7b4b2a", shirt: "blouse", sc: "#ffffff", acc: ["earrings"] },
     bio: "Đếm tiền cả ngày nhưng ước mơ là mở tiệm bánh.",
     greet: ["Chị ơi, cứu em với, cuối tháng chốt sổ!", "Hôm nay khách vay đông dã man.", "Cho em món mát mát, ngọt ngọt nhé."],
@@ -492,7 +545,7 @@ const CHARACTERS = [
       { h: 5, lines: ["Em nghỉ ngân hàng rồi, tiệm bánh khai trương tuần sau.", "Mình làm đối tác nha: bánh của em, cà phê của chị!"], reward: { flow: 0.04, rep: 4 } },
     ] },
 
-  { id: "chusau", name: "Chú Sáu", title: "Xe ôm truyền thống", loc: "saigon", day: 2, fav: ["den_da", "sua_da"], patience: 1.3, tip: 0.9,
+  { id: "chusau", name: "Chú Sáu", title: "Xe ôm truyền thống", loc: "saigon", day: 2, fav: ["tra_tac", "den_da", "sua_da"], patience: 1.3, tip: 0.9,
     look: { g: "m", age: "old", skin: "#c68642", hair: "cap", hc: "#2f4858", shirt: "shirt", sc: "#4ea8de", acc: ["mustache"] },
     bio: "Chạy xe ôm từ thời chưa có app. Biết mọi câu chuyện của Sài Gòn.",
     greet: ["Con gái, cho chú ly đen đá, nhiều đá nghen!", "Trời Sài Gòn nóng muốn xỉu luôn con.", "Bữa nay ế khách quá trời."],
@@ -537,7 +590,7 @@ const CHARACTERS = [
     ] },
 
   // ===== Đà Lạt =====
-  { id: "phuong", name: "Phương", title: "Chủ vườn dâu", loc: "dalat", day: 1, fav: ["ca_cao_nong", "tra_dau", "den_nong"], patience: 1.3, tip: 1.1,
+  { id: "phuong", name: "Phương", title: "Chủ vườn dâu", loc: "dalat", day: 1, fav: ["tra_atiso", "ca_cao_nong", "tra_dau", "den_nong"], patience: 1.3, tip: 1.1,
     look: { g: "f", age: "young", skin: "#ffe0cc", hair: "pony", hc: "#3d2314", shirt: "flannel", sc: "#d62828", acc: ["scarf"] },
     bio: "Bỏ phố về Đà Lạt trồng dâu. Hai bàn tay lúc nào cũng thơm mùi đất.",
     greet: ["Chào Uyên, sáng nay sương dày quá.", "Dâu năm nay ngọt lắm nè!", "Cho mình ly gì nóng nóng nha."],
@@ -581,7 +634,7 @@ const CHARACTERS = [
       { h: 5, lines: ["Triển lãm 'Những cửa hàng nhỏ' mở ở Sài Gòn. Ảnh bìa là quán em.", "Hàng nghìn người đã thấy nụ cười của Uyên đấy."], reward: { flow: 0.05 } },
     ] },
 
-  { id: "bamuoi", name: "Bà Mười", title: "Đan len bên hiên", loc: "dalat", day: 2, fav: ["ca_cao_nong", "den_nong"], patience: 2.0, tip: 1.0,
+  { id: "bamuoi", name: "Bà Mười", title: "Đan len bên hiên", loc: "dalat", day: 2, fav: ["sua_dau_nanh", "ca_cao_nong", "den_nong"], patience: 2.0, tip: 1.0,
     look: { g: "f", age: "old", skin: "#eec39a", hair: "bun", hc: "#e0e0e0", shirt: "blouse", sc: "#b5838d", acc: ["scarf"] },
     bio: "Đan khăn len cho cả xóm. Thích ngồi sưởi nắng và kể chuyện xưa.",
     greet: ["Cháu gái, cho bà ly ấm ấm.", "Bà đan cho cháu cái khăn nè, lạnh rồi đó.", "Hôm nay bà khỏe, đi bộ tới đây luôn."],
@@ -626,7 +679,7 @@ const CHARACTERS = [
       { h: 5, lines: ["Uyên ơi, tôi được nhập quốc tịch... à không, được cấp thẻ tạm trú dài hạn!", "Hội An là nhà tôi rồi. Và quán Uyên là phòng khách."], reward: { rep: 6, flow: 0.03 } },
     ] },
 
-  { id: "cosau", name: "Cô Sáu", title: "Thợ may áo dài", loc: "hoian", day: 1, fav: ["nuoc_mot", "tra_vai"], patience: 1.3, tip: 1.2,
+  { id: "cosau", name: "Cô Sáu", title: "Thợ may áo dài", loc: "hoian", day: 1, fav: ["tra_la_dua", "nuoc_mot", "tra_vai"], patience: 1.3, tip: 1.2,
     look: { g: "f", age: "mid", skin: "#f0c29b", hair: "bun", hc: "#1a1a1a", shirt: "aodai", sc: "#e63946", acc: ["earrings"] },
     bio: "Tiệm may ba đời. May áo dài cho khách từ khắp thế giới trong hai mươi bốn giờ.",
     greet: ["Uyên ơi, khách đặt năm bộ áo dài, cô cần tỉnh táo!", "Cho cô ly mát mát, may cả đêm qua.", "Hôm nay cô đo cho cô dâu người Pháp đó."],
@@ -671,7 +724,7 @@ const CHARACTERS = [
     ] },
 
   // ===== Đà Nẵng =====
-  { id: "hai", name: "Hải", title: "Dân lướt sóng", loc: "danang", day: 1, fav: ["sinh_to_bo", "nuoc_cam", "ca_phe_dua"], patience: 1.0, tip: 1.1,
+  { id: "hai", name: "Hải", title: "Dân lướt sóng", loc: "danang", day: 1, fav: ["nuoc_dua", "sinh_to_bo", "nuoc_cam", "ca_phe_dua"], patience: 1.0, tip: 1.1,
     look: { g: "m", age: "young", skin: "#b5774a", hair: "curly", hc: "#3b2a1a", shirt: "tank", sc: "#00b4d8", acc: [] },
     bio: "Sáng lướt sóng Mỹ Khê, chiều dạy lướt cho khách, tối ngủ sớm.",
     greet: ["Sóng hôm nay cao hai mét đó chị!", "Cho em ly mát lạnh nha, nắng cháy rồi.", "Chị đi lướt sóng với em không?"],
@@ -693,7 +746,7 @@ const CHARACTERS = [
       { h: 5, lines: ["Chị Uyên đứng được trên ván rồi! Em quay video lại rồi nè.", "Video viral luôn, ai cũng hỏi 'chị chủ quán lướt sóng' là ai."], reward: { rep: 6, flow: 0.03 } },
     ] },
 
-  { id: "ngoc", name: "Chị Ngọc", title: "Hướng dẫn viên du lịch", loc: "danang", day: 1, fav: ["ca_phe_dua", "tra_dao"], patience: 0.9, tip: 1.3,
+  { id: "ngoc", name: "Chị Ngọc", title: "Hướng dẫn viên du lịch", loc: "danang", day: 1, fav: ["dua_dam", "ca_phe_dua", "tra_dao"], patience: 0.9, tip: 1.3,
     look: { g: "f", age: "mid", skin: "#f3c7a4", hair: "bob", hc: "#2b1b12", shirt: "shirt", sc: "#52b788", acc: ["sunglasses"] },
     bio: "Nói được bốn thứ tiếng, dẫn đoàn lên Bà Nà, xuống Hội An mỗi ngày.",
     greet: ["Uyên ơi, đoàn khách Hàn tới sau mười phút nữa!", "Chị cần ly mát để nói tiếp tám tiếng.", "Hôm nay dẫn đoàn lên Ngũ Hành Sơn, mệt ghê."],
@@ -738,7 +791,7 @@ const CHARACTERS = [
     ] },
 
   // ===== Huế =====
-  { id: "thaylam", name: "Thầy Lâm", title: "Giáo viên Văn", loc: "hue", day: 1, fav: ["ca_phe_muoi", "den_nong"], patience: 1.5, tip: 1.1,
+  { id: "thaylam", name: "Thầy Lâm", title: "Giáo viên Văn", loc: "hue", day: 1, fav: ["tra_cung_dinh", "ca_phe_muoi", "den_nong"], patience: 1.5, tip: 1.1,
     look: { g: "m", age: "mid", skin: "#f0c8a0", hair: "side", hc: "#3a3a3a", shirt: "shirt", sc: "#f8f9fa", acc: ["glasses"] },
     bio: "Dạy Văn trường Quốc Học. Chấm bài bên ly cà phê muối mỗi chiều.",
     greet: ["Chào cô chủ, chiều Huế buồn mà đẹp.", "Chồng bài kiểm tra này cao quá...", "Cho thầy một ly muối, như mọi khi."],
@@ -760,7 +813,7 @@ const CHARACTERS = [
       { h: 5, lines: ["Thầy viết bài thơ tặng quán, khắc lên tấm gỗ.", "Treo ở cửa nhé: 'Giữ hương xưa, mở lối mới'."], reward: { rep: 7 } },
     ] },
 
-  { id: "ohien", name: "O Hiền", title: "Bán chè hẻm", loc: "hue", day: 1, fav: ["ca_phe_muoi", "sua_da"], patience: 1.2, tip: 1.0,
+  { id: "ohien", name: "O Hiền", title: "Bán chè hẻm", loc: "hue", day: 1, fav: ["sua_sen", "ca_phe_muoi", "sua_da"], patience: 1.2, tip: 1.0,
     look: { g: "f", age: "mid", skin: "#eab991", hair: "nonla", hc: "#1a1a1a", shirt: "aodai", sc: "#9b5de5", acc: [] },
     bio: "Gánh chè ba mươi sáu món, nổi tiếng nhất hẻm Kiệt.",
     greet: ["Mệ ơi... à không, Uyên ơi, cho o ly cà phê muối!", "Hôm ni nắng chang chang, o mệt.", "O mang cho Uyên chén chè bột lọc nè."],
@@ -839,4 +892,5 @@ const TUTORIAL = [
   "👥 Khi uy tín tăng, hãy thuê lần lượt: Phục vụ → Tạp vụ → Thu ngân → Pha chế. Có pha chế rồi, Uyên mới mở được quán mới!",
   "💖 Khách ruột (tên hồng) có câu chuyện riêng. Khi họ hiện 💖, hãy “Ngồi tâm sự” — quán tạm ngưng đón khách để Uyên lắng nghe. Nghe hết chuyện, họ sẽ tặng kỷ vật cho Sổ sưu tập.",
   "📺 Bấm vào TV trên tường để đổi nhạc hoặc tìm nhạc YouTube.",
+  "⚠️ Phá sản khi uy tín của bất kỳ quán nào về 0 (khách bỏ đi, pha sai món làm giảm uy tín) hoặc khi két tiền về 0 hay âm (sau khi trả tiền thuê, lương cuối ngày). Phá sản là phải chơi lại từ đầu!",
 ];

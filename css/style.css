@@ -339,3 +339,61 @@ input[type=range] { accent-color: var(--coral); width: 220px; }
 .pause-card { background: var(--paper); border-radius: 26px; padding: 26px 44px; text-align: center; font-size: 30px; font-weight: 800; color: var(--coral-d);
   box-shadow: 0 16px 40px rgba(0,0,0,.3); display: flex; flex-direction: column; gap: 12px; align-items: center; animation: pop .2s; }
 .pause-ic { font-size: 60px; line-height: 1; }
+
+/* ===== Nhân viên đi lại ===== */
+#lobby-layer { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.staff.lobby { top: calc(334px + var(--E)); width: 136px; height: 204px; }
+.staff .pw { width: 100%; height: 100%; }
+.staff.left .pw { transform: scaleX(-1); }
+.staff.walking .person { animation: walk .3s ease-in-out infinite alternate; }
+.staff.brewing .person { animation: bob .25s ease-in-out infinite alternate; }
+.staff .work:empty { display: none; }
+.staff.busy .work { display: block; font-size: 26px; top: 30px; right: -30px; filter: drop-shadow(0 2px 2px rgba(0,0,0,.2)); }
+.staff.brewing .work { animation: steamy .8s ease-in-out infinite alternate; }
+@keyframes steamy { from { transform: translateY(0) scale(1); } to { transform: translateY(-6px) scale(1.1); } }
+.broom { position: absolute; right: 2px; bottom: 6px; width: 40px; height: 100px; transform-origin: 50% 8%; animation: sweep .55s ease-in-out infinite alternate; }
+.staff.walking .broom { animation-duration: .3s; }
+@keyframes sweep { from { transform: rotate(22deg); } to { transform: rotate(-16deg); } }
+.dust { position: absolute; right: -6px; bottom: 0; width: 50px; height: 30px; }
+.dust i { position: absolute; bottom: 2px; width: 10px; height: 10px; border-radius: 50%; background: rgba(160, 130, 100, .45); animation: dust 1.1s ease-out infinite; }
+.dust i:nth-child(1) { left: 4px; } .dust i:nth-child(2) { left: 20px; animation-delay: .35s; } .dust i:nth-child(3) { left: 34px; animation-delay: .7s; }
+@keyframes dust { 0% { transform: translate(0, 0) scale(.5); opacity: .8; } 100% { transform: translate(8px, -22px) scale(1.6); opacity: 0; } }
+#stage.is-paused .staff *, #stage.is-paused .customer .person { animation-play-state: paused !important; }
+.trait-line { font-size: 14px; color: var(--muted); }
+.cand-grid { grid-template-columns: repeat(3, 1fr); }
+.card.cand { display: flex; flex-direction: column; }
+.card.cand > .row:last-child { margin-top: auto !important; }
+
+/* ===== Bảng thực đơn trên tường ===== */
+#menu-board { position: absolute; left: 604px; top: calc(94px + var(--E)); width: 156px; height: 128px; z-index: 2; cursor: pointer; border-radius: 10px; }
+#menu-board:hover { box-shadow: 0 0 0 4px var(--sun), 0 0 18px rgba(255, 209, 102, .8); }
+#menu-board:after { content: "👆 Xem món"; position: absolute; bottom: -20px; left: 50%; transform: translateX(-50%); background: #fff; border-radius: 8px; padding: 0 6px; font-size: 12px; font-weight: 700; opacity: .85; white-space: nowrap; }
+.menu-grid { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
+.menu-cup { width: 56px; height: 56px; flex: none; }
+.steps { margin: 6px 0 0; padding-left: 22px; font-size: 15px; }
+.steps li { margin: 1px 0; }
+
+/* ===== Cảnh báo uy tín thấp ===== */
+#hud-rep.danger { background: var(--bad); animation: danger 0.8s ease-in-out infinite alternate; }
+@keyframes danger { from { box-shadow: 0 0 0 0 rgba(255,255,255,.0); } to { box-shadow: 0 0 0 4px rgba(255,255,255,.7); } }
+
+/* ===== Bản đồ chi nhánh ===== */
+.branch-wrap { display: grid; grid-template-columns: 540px 1fr; gap: 18px; align-items: start; }
+.vn-map { width: 540px; height: 620px; filter: drop-shadow(0 6px 10px rgba(0,0,0,.12)); }
+.branch-side .chart { height: 170px; }
+.pin { cursor: pointer; }
+.pin-dot { fill: #fff; stroke: #e07a5f; stroke-width: 3; }
+.pin-halo { fill: #e07a5f; opacity: .25; }
+.pin.owned .pin-dot { stroke: #2a9d8f; } .pin.owned .pin-halo { fill: #2a9d8f; }
+.pin.ready .pin-halo { animation: halo 1.2s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.pin.locked .pin-dot { stroke: #9e9e9e; } .pin.locked .pin-halo { fill: #9e9e9e; }
+.pin.sel .pin-halo { opacity: .6; }
+.pin-label { fill: #fffdf8; stroke: #f0dcc6; stroke-width: 2; }
+.pin.sel .pin-label { stroke: #e07a5f; stroke-width: 3; }
+.pin-name { font-size: 15px; font-weight: 800; fill: #4a3b3b; }
+.pin-cost { font-size: 13px; font-weight: 700; fill: #c4553d; }
+.pin.owned .pin-name { fill: #1f776c; }
+.pin:hover .pin-label { stroke: #ffd166; stroke-width: 3; }
+.island { font-size: 11px; font-weight: 700; fill: #1d6fa5; }
+.sea-name { font-size: 18px; font-weight: 800; fill: #1d6fa5; opacity: .6; font-style: italic; }
+@keyframes halo { 0%, 100% { transform: scale(1); opacity: .35; } 50% { transform: scale(1.5); opacity: .1; } }

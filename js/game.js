@@ -35,24 +35,32 @@ const R = {       // dữ liệu tạm trong ngày
   regularsToday: [], sim: {}, cands: {}, bJob: null, lastSave: 0, dialog: null, criticDone: false, closingShown: false,
 };
 
+// Kho khởi đầu của quán: nguyên liệu cơ bản + 10 phần mỗi đặc sản địa phương
+function starterInv(locId) {
+  const inv = Object.assign({}, STARTER_INV);
+  for (const k in INGREDIENTS) if (INGREDIENTS[k].only && INGREDIENTS[k].only.includes(locId)) inv[k] = 10;
+  return inv;
+}
 function newShop(loc, first) {
-  return { loc, rep: first ? 10 : 25, decor: {}, staff: { waiter: null, cleaner: null, cashier: null, barista: null }, served: 0, perfect: 0, opened: S ? S.day : 1 };
+  const inv = starterInv(loc);
+  if (first) Object.assign(inv, { phin: 40, sua_dac: 30, duong: 40, chanh: 20, sa: 12, cacao: 12 });
+  return { loc, inv, target: Object.assign({}, inv), equip: {}, rep: first ? 30 : 35, decor: {}, staff: { waiter: null, cleaner: null, cashier: null, barista: null }, served: 0, perfect: 0, opened: S ? S.day : 1 };
 }
 function newState() {
   const st = {
-    v: 1, money: 2000000, day: 1, shops: [], active: 0,
-    inv: { phin: 40, sua_dac: 30, sua_tuoi: 20, duong: 40, tra: 20, chanh: 20, sa: 12, cacao: 12 },
-    target: { phin: 40, sua_dac: 30, sua_tuoi: 20, duong: 30, tra: 20, chanh: 15, sa: 10, cacao: 10 },
-    equip: {}, secrets: {}, chars: {}, history: [], achv: {},
+    v: 2, money: 2000000, day: 1, shops: [], active: 0, lastOpenDay: 1,
+    secrets: {}, chars: {}, history: [], achv: {},
     totals: { served: 0, perfect: 0, earned: 0, chats: 0 },
     flowBonus: 0, marketing: [], settings: { music: 0.5, sfx: 0.6, hints: true, musicOn: true, musicPreset: "auto" },
     items: { phin_ngoai: 1 }, setsDone: {}, tipLoc: {},
-    introDone: false, debtDays: 0, lastReport: null,
+    introDone: false, debtDays: 0, lastReport: null, repV2: true,
   };
   S = st; st.shops.push(newShop("hanoi", true));
   return st;
 }
 const shop = () => S.shops[S.active];
+// Két tiền về 0 hoặc âm là phá sản, nên mọi khoản chi phải chừa lại tiền
+const canAfford = cost => S.money - cost > 0;
 const loc = (sh = shop()) => LOCATIONS[sh.loc];
 
 // ---------- Lưu / tải ----------
@@ -77,6 +85,18 @@ function migrate(st) {
   const merged = Object.assign(base, st);
   merged.settings = Object.assign(newState().settings, st.settings || {});
   merged.totals = Object.assign({ served: 0, perfect: 0, earned: 0, chats: 0 }, st.totals || {});
+  if (st.inv) {
+    (merged.shops || []).forEach((sh, k) => {
+      sh.equip = Object.assign({}, st.equip || {});
+      sh.inv = k === (st.active || 0) ? Object.assign(starterInv(sh.loc), st.inv) : starterInv(sh.loc);
+      sh.target = Object.assign({}, starterInv(sh.loc), st.target || {});
+    });
+    delete merged.inv; delete merged.target; delete merged.equip;
+  }
+  (merged.shops || []).forEach(sh => { sh.inv = sh.inv || starterInv(sh.loc); sh.target = sh.target || starterInv(sh.loc); sh.equip = sh.equip || {}; });
+  if (!merged.repV2) { (merged.shops || []).forEach(sh => sh.rep = Math.min(100, sh.rep + 20)); merged.repV2 = true; }
+  const oldTrait = { cham: "nhanh", duyen: "duyen", can: "taynghe", vui: "thanthien" };
+  (merged.shops || []).forEach(sh => Object.values(sh.staff).forEach(x => { if (x && !x.perks) { x.perks = [oldTrait[x.trait] || "nhanh"]; x.flaws = []; delete x.trait; } }));
   return merged;
 }
 function loadData(data) {
@@ -137,28 +157,35 @@ function speech(x, y, text) {
 }
 
 // ---------- Kiểm tra mở khóa ----------
-function ingAvail(k) {
+function ingAvail(k, sh = shop()) {
   const I = INGREDIENTS[k];
-  if (I.equip && !S.equip[I.equip]) return false;
+  if (I.only && !I.only.includes(sh.loc)) return false;
+  if (I.equip && !sh.equip[I.equip]) return false;
   if (I.secret && !S.secrets[I.secret]) return false;
   return true;
 }
-function drinkAvail(id) {
+function drinkAvail(id, sh = shop()) {
   const d = DRINKS[id];
-  if (d.equip && !S.equip[d.equip]) return false;
+  if (d.only && d.only !== sh.loc) return false;
+  if (d.equip && !sh.equip[d.equip]) return false;
   if (d.secret && !S.secrets[id]) return false;
-  return d.recipe.every(ingAvail);
+  return d.recipe.every(k => ingAvail(k, sh));
 }
 const outageNow = () => R.phase === "open" && (!!(R.powerCut && R.time < R.powerCut.until) || !!(R.event && R.event.outage && R.time >= R.event.outage[0] && R.time < R.event.outage[1]));
-const menuList = () => Object.keys(DRINKS).filter(drinkAvail).filter(id => !outageNow() || !powerDrink(id));
+// Món đang bán của một quán (cúp điện chỉ ảnh hưởng quán Uyên đang đứng)
+const menuList = (sh = shop()) => Object.keys(DRINKS).filter(id => drinkAvail(id, sh)).filter(id => sh !== shop() || !outageNow() || !powerDrink(id));
 function ingPrice(k) {
   let p = INGREDIENTS[k].cost || 0;
   if (R.event && R.event.priceUp && R.event.priceUp.includes(k)) p *= 1.3;
   if (R.event && R.event.discount) p *= 1 - R.event.discount;
   return Math.round(p / 100) * 100;
 }
-const traitOf = st => st && st.trait;
-const hasTrait = (sh, t) => Object.values(sh.staff).some(s => s && s.trait === t);
+// Ưu/nhược điểm của nhân viên
+const staffTraits = st => [...(st.perks || []).map(k => PERKS[k]), ...(st.flaws || []).map(k => FLAWS[k])].filter(Boolean);
+const effOf = (st, key) => st ? staffTraits(st).reduce((a, t) => a + ((t.eff && t.eff[key]) || 0), 0) : 0;
+// Nhân viên có mặt hôm nay (không xin nghỉ)
+const present = (sh, role) => { const st = sh.staff[role]; return st && !st.absent ? st : null; };
+const shopEff = (sh, key) => ROLE_ORDER.reduce((a, r) => a + effOf(present(sh, r), key), 0);
 
 // ---------- Thời tiết, sự kiện, mục tiêu ----------
 function rollWeather(locId) {
@@ -170,7 +197,7 @@ function rollWeather(locId) {
   return pick(table[locId]);
 }
 function makeGoals() {
-  const menu = menuList();
+  const menu = menuList(shop());
   const n = clamp(8 + S.day, 10, 45);
   const pool = [
     { type: "served", n, text: `Phục vụ ${n} ly`, reward: 150000 + S.day * 5000 },
@@ -211,16 +238,19 @@ function chainRevenueToday() { return Object.values(R.today.shops).reduce((a, s)
 // ---------- Chuẩn bị ngày mới ----------
 function newToday() {
   const shops = {};
-  S.shops.forEach((sh, i) => shops[i] = { served: 0, perfect: 0, lost: 0, revenue: 0, tips: 0, open: i === S.active || !!sh.staff.barista });
+  S.shops.forEach((sh, i) => shops[i] = { served: 0, perfect: 0, lost: 0, revenue: 0, tips: 0, open: i === S.active || !!present(sh, "barista") });
   return { shops, served: 0, perfect: 0, chats: 0, drinks: {}, purchases: 0, marketing: 0, eventCost: 0, bonus: 0, lostActive: 0, shortage: {} };
 }
 function genCandidate(role) {
   const g = rand() < 0.5 ? "f" : "m";
   const skill = clamp(1 + Math.floor(rand() * rand() * 5.5), 1, 5);
+  const perks = shuffle(Object.keys(PERKS)).slice(0, rand() < 0.35 ? 2 : 1);
+  const flaws = rand() < 0.75 ? [pick(Object.keys(FLAWS))] : [];
   const [lo, hi] = ROLES[role].wage;
-  const wage = Math.round((lo + (hi - lo) * ((skill - 1) / 4) * (0.85 + rand() * 0.3)) / 5000) * 5000;
+  let wage = (lo + (hi - lo) * ((skill - 1) / 4)) * (0.9 + rand() * 0.2) * (1 + 0.08 * perks.length - 0.06 * flaws.length);
+  flaws.forEach(f => { if (FLAWS[f].wage) wage *= 1 + FLAWS[f].wage; });
   const look = randLook(g, "young"); look.shirt = "apron"; look.sc = pick(["#e07a5f", "#2a9d8f", "#f4a261", "#8338ec", "#3a86ff"]);
-  return { name: pick(HO) + " " + pick(g === "f" ? TEN_F : TEN_M), look, skill, wage, trait: pick(TRAITS).id, days: 0, role };
+  return { name: pick(HO) + " " + pick(g === "f" ? TEN_F : TEN_M), look, skill, wage: Math.round(wage / 5000) * 5000, perks, flaws, days: 0, role };
 }
 function genCands() {
   R.cands = {};
@@ -232,10 +262,18 @@ function prepareDay() {
   R.event = S.day > 1 && rand() < 0.38 ? Object.assign({}, pick(EVENTS)) : null;
   R.today = newToday();
   R.goals = makeGoals();
-  R.regularsToday = []; R.sim = {}; R.criticDone = false; R.clean = 100;
+  R.regularsToday = []; R.sim = {}; R.criticDone = false; R.clean = 100; R.expandAsked = false;
   R.customers = []; R.tickets = []; R.sel = null; R.cup = []; R.bJob = null; R.closingShown = false;
   clearSurprises();
   genCands();
+  // Nhân viên "hay xin nghỉ" có thể vắng mặt hôm nay
+  R.away = [];
+  S.shops.forEach(sh => ROLE_ORDER.forEach(r => {
+    const st = sh.staff[r]; if (!st) return;
+    st.absent = rand() < effOf(st, "absent");
+    if (st.absent) R.away.push(`${st.name} (${ROLES[r].name} · ${LOCATIONS[sh.loc].city})`);
+  }));
+  R.today = newToday();
   if (R.event && R.event.cost) { S.money -= R.event.cost; R.today.eventCost += R.event.cost; }
   autoRestock();
   buildScene(); renderAll();
@@ -243,22 +281,24 @@ function prepareDay() {
   showPrepare();
 }
 function autoRestock() {
-  if (!S.shops.some(sh => sh.staff.cashier)) return;
-  let cost = 0, bought = 0;
-  for (const k in S.target) {
-    if (!ingAvail(k) || INGREDIENTS[k].free) continue;
-    const need = Math.max(0, (S.target[k] || 0) - (S.inv[k] || 0));
-    if (!need) continue;
-    const c = need * ingPrice(k);
-    if (S.money - c < 0) continue;
-    S.money -= c; cost += c; bought += need; S.inv[k] = (S.inv[k] || 0) + need;
-  }
-  if (bought) { R.today.purchases += cost; toast(`💁 Thu ngân đã nhập ${bought} phần nguyên liệu (${money(cost)})`); }
+  S.shops.forEach(sh => {
+    if (!present(sh, "cashier")) return;
+    let cost = 0, bought = 0;
+    for (const k in sh.target) {
+      if (!ingAvail(k, sh) || INGREDIENTS[k].free) continue;
+      const need = Math.max(0, (sh.target[k] || 0) - (sh.inv[k] || 0));
+      if (!need) continue;
+      const c = need * ingPrice(k);
+      if (!canAfford(c)) continue;
+      S.money -= c; cost += c; bought += need; sh.inv[k] = (sh.inv[k] || 0) + need;
+    }
+    if (bought) { R.today.purchases += cost; toast(`💁 Thu ngân quán ${LOCATIONS[sh.loc].city} đã nhập ${bought} phần nguyên liệu (${money(cost)})`); }
+  });
 }
 function openDay() {
   R.phase = "open"; R.time = DAY_START; R.acc = 0; R.paused = false;
   // Quán không có pha chế và Uyên không đứng -> đóng cửa
-  S.shops.forEach((sh, i) => R.today.shops[i].open = i === S.active || !!sh.staff.barista);
+  S.shops.forEach((sh, i) => R.today.shops[i].open = i === S.active || !!present(sh, "barista"));
   closeModal(); buildScene(); renderAll(); setPauseUI();
   Sound.setStyle(shop().loc);
   Sound.sfx("day");
@@ -288,7 +328,7 @@ function lambda(i, t) {
   for (const m of S.marketing) if (m.scope === "all" || i === S.active) mk += m.boost;
   const d = sh.decor;
   const ac = d.may_lanh ? (R.weatherBy[sh.loc] === "nong" ? 1.25 : 1.1) : 1;
-  return 0.06 * curve * L.flow * (0.6 + sh.rep / 100 * 0.9) * W.flow * ((R.event && R.event.flow) || 1) * weekend * mk * (1 + S.flowBonus) * (d.bien_neon ? 1.15 : 1) * ac;
+  return 0.06 * (1 + shopEff(sh, "flow")) * curve * L.flow * (0.6 + sh.rep / 100 * 0.9) * W.flow * ((R.event && R.event.flow) || 1) * weekend * mk * (1 + S.flowBonus) * (d.bien_neon ? 1.15 : 1) * ac;
 }
 function maxSlots() { return Math.min(6, 3 + (shop().decor.ban_ghe || 0)); }
 
@@ -310,17 +350,20 @@ function tickMinute() {
     if (c.state === "order" || c.state === "drink") {
       c.pat -= 1; c.wait++;
       if (c.pat <= 0) { leave(c, "angry"); continue; }
-      if (c.state === "order" && sh.staff.waiter && c.wait >= Math.max(1, 4 - sh.staff.waiter.skill * 0.6)) takeOrder(c);
+      const wt = present(sh, "waiter");
+      if (c.state === "order" && wt && c.wait >= Math.max(1, (4 - wt.skill * 0.6) * (1 - effOf(wt, "speed")))) takeOrder(c);
     }
   }
   syncPower();
   // Pha chế tự động tại quán Uyên đứng
   baristaTick();
+  staffTick();
   // Các quán khác tự vận hành
   S.shops.forEach((s, i) => { if (i !== S.active && R.today.shops[i].open) simTick(i); });
   // Hết giờ
   if (R.time >= DAY_END + 60) R.customers.slice().forEach(c => leave(c, "quiet"));
   if (R.time >= DAY_END && !R.customers.length && R.time > DAY_END + 2) { endDay(); return; }
+  if (checkBankrupt()) return;
   if (R.time % 30 === 0) save(true);
   renderHud(); updateBars();
 }
@@ -350,7 +393,7 @@ function genName(look) {
   return pre + " " + t;
 }
 function pickDrink(i, favs) {
-  const menu = menuList(); if (!menu.length) return "den_da";
+  const menu = menuList(S.shops[i]); if (!menu.length) return "den_da";
   if (favs) { const f = favs.filter(x => menu.includes(x)); if (f.length && rand() < 0.65) return pick(f); }
   const sh = S.shops[i], W = WEATHER[R.weatherBy[sh.loc] || "nang"], spec = LOCATIONS[sh.loc].specialty;
   const w = menu.map(id => { const d = DRINKS[id]; let x = d.hot ? W.hot : clamp(2 - W.hot * 0.6, 0.3, 2); if (id === spec) x *= 2.2; if (d.secret) x *= 0.6; return x; });
@@ -395,7 +438,7 @@ function spawnCustomer(critic) {
     c = { reg: null, name: genName(look), look, drink: items[0], items, patF: 0.8 + rand() * 0.5 };
   }
   c.items = c.items || [c.drink]; c.idx = 0;
-  const pf = c.patF * (sh.staff.waiter ? 1.25 : 1) * (sh.decor.loa_jazz ? 1.15 : 1) * (hasTrait(sh, "vui") ? 1.1 : 1);
+  const pf = c.patF * (present(sh, "waiter") ? 1.25 : 1) * (sh.decor.loa_jazz ? 1.15 : 1) * Math.max(0.5, 1 + shopEff(sh, "patience"));
   Object.assign(c, { uid: ++R.uid, slot: s, state: "walking", wait: 0, chatted: false, tipBonus: 0, maxOrder: Math.round(55 * pf), maxDrink: Math.round(110 * pf * (1 + 0.5 * (c.items.length - 1))) });
   c.pat = c.max = c.maxOrder;
   mountCustomer(c, c.critic ? "📝 " : c.reg ? "💖 " : "");
@@ -474,6 +517,42 @@ function leave(c, how) {
   }
   c.state = "gone";
   removeCustomer(c);
+  if (how === "angry") checkBankrupt();
+}
+
+// ---------- Phá sản ----------
+// Uy tín một quán về 0: khách mất niềm tin, chuỗi đóng cửa, phải chơi lại từ đầu
+function checkBankrupt() {
+  if (R.phase !== "open" || !S) return false;
+  R.repWarn = R.repWarn || {};
+  S.shops.forEach((sh, i) => {
+    if (sh.rep < 10 && !R.repWarn[i]) { R.repWarn[i] = true; toast(`⚠️ Uy tín quán ${LOCATIONS[sh.loc].city} chỉ còn ${Math.ceil(sh.rep)}! Về 0 là phá sản.`, "bad"); Sound.sfx("alarm"); }
+    if (sh.rep >= 15) R.repWarn[i] = false;
+  });
+  if (S.money <= 0) { gameOver("money"); return true; }
+  const i = S.shops.findIndex(sh => sh.rep <= 0.01);
+  if (i < 0) return false;
+  gameOver("rep", i);
+  return true;
+}
+function gameOver(reason, i) {
+  const L = reason === "rep" ? LOCATIONS[S.shops[i].loc] : null;
+  R.phase = "gameover"; R.paused = false;
+  closeDialog(); clearSurprises(); setPauseUI();
+  R.customers.slice().forEach(c => { if (c.el) c.el.remove(); });
+  R.customers = []; R.tickets = []; R.sel = null; R.cup = []; R.bJob = null;
+  renderTickets(); renderBench();
+  try { localStorage.removeItem(SAVE_KEY(slot)); if (lastSlot() === slot) localStorage.removeItem(META_KEY); } catch (e) {}
+  Sound.sfx("powerdown");
+  const friends = Object.values(S.chars).filter(c => c.aff >= 40).length;
+  const body = openModal("💸 Phá sản — cửa hàng đóng cửa", `
+    <div class="intro-wrap"><div class="portrait">${Art.person(Art.UYEN, "sad")}</div>
+    <div class="intro-text" style="font-size:20px">${reason === "rep" ? `Uy tín quán <b>${L.city}</b> đã về 0. Khách không còn tin tưởng, chủ nhà đòi lại mặt bằng` : `Két tiền còn <b>${money(S.money)}</b>, không đủ trả tiền thuê và lương nhân viên`}, và chuỗi Cửa hàng nhỏ của Uyên phải đóng cửa.
+      <p style="margin:12px 0">📞 Ngoại gọi điện: “Không sao đâu con. Ngã ở đâu thì đứng dậy ở đó. Làm lại từ đầu, lần này con sẽ giỏi hơn.”</p>
+      <div class="row"><span class="pill">📅 Trụ được ${S.day} ngày</span><span class="pill">🏪 ${S.shops.length} quán</span><span class="pill">☕ ${S.totals.served} ly</span><span class="pill">💵 Tổng thu ${money(S.totals.earned)}</span><span class="pill">💞 ${friends} khách ruột thân thiết</span><span class="pill">📚 ${Object.keys(S.items).length} kỷ vật</span></div>
+      <p class="sub">Tiến trình ở ô lưu ${slot} đã bị xóa.</p>
+      <div class="row" style="margin-top:12px"><button class="btn big teal" id="go-restart">🔁 Chơi lại từ đầu</button></div></div></div>`, { noClose: true });
+  $("#go-restart").onclick = () => { newState(); S.introDone = false; applySettings(); STF.sig = ""; buildScene(); renderAll(); showIntro(); };
 }
 
 // ---------- Hội thoại ----------
@@ -711,7 +790,7 @@ function qteEnd(win) {
       break;
     case "cat":
       if (win) T("🐈 Mèo được mời ra ngoài, còn ngoái lại kêu meo meo.");
-      else { S.inv.sua_tuoi = Math.max(0, (S.inv.sua_tuoi || 0) - 3); T("🐈 Mèo uống trộm mất 3 phần sữa tươi!", true); }
+      else { shop().inv.sua_tuoi = Math.max(0, (shop().inv.sua_tuoi || 0) - 3); T("🐈 Mèo uống trộm mất 3 phần sữa tươi!", true); }
       break;
     case "leak":
       if (win) T("🪣 Hứng kịp, sàn vẫn khô ráo!");
@@ -759,9 +838,10 @@ function addIngredient(k) {
   if (!ingAvail(k)) { const I = INGREDIENTS[k]; toast(`🔒 Cần mua ${EQUIPMENT[I.equip] ? EQUIPMENT[I.equip].name : "công thức"} để dùng ${I.name}`, "bad"); return; }
   if (outageNow() && powerIng(k)) { toast("🔌 Đang cúp điện, máy không chạy được!", "bad"); return; }
   const I = INGREDIENTS[k];
-  if (!I.free && (S.inv[k] || 0) <= 0) { toast(`📦 Hết ${I.name}! Vào Kho để nhập thêm.`, "bad"); Sound.sfx("error"); return; }
+  const inv = shop().inv;
+  if (!I.free && (inv[k] || 0) <= 0) { toast(`📦 Hết ${I.name}! Vào Kho để nhập thêm.`, "bad"); Sound.sfx("error"); return; }
   if (R.cup.length >= 7) { toast("Ly đầy rồi!", "bad"); return; }
-  if (!I.free) S.inv[k]--;
+  if (!I.free) inv[k]--;
   R.cup.push(k);
   Sound.sfx(k === "da" ? "ice" : ["phin", "espresso", "nuoc_nong", "sua_tuoi", "sua_dac", "tra"].includes(k) ? "pour" : "pop");
   if (k === "phin" || k === "espresso") {
@@ -786,7 +866,7 @@ function resolveServe(c, q, byStaff) {
   const payRate = { perfect: 1, good: 1, ok: 0.7, wrong: 0 }[q];
   let tipRate = { perfect: 0.15, good: 0.06, ok: 0, wrong: 0 }[q];
   if (q !== "wrong") {
-    tipRate += (c.pat / c.max) * 0.08 + c.tipBonus + (sh.decor.cay_xanh ? 0.05 : 0) + (sh.staff.cashier ? 0.1 : 0) + (sh.decor.may_lanh ? 0.05 : 0) + ((R.event && R.event.tip) || 0) + (hasTrait(sh, "duyen") ? 0.05 : 0) + (S.tipLoc[sh.loc] || 0);
+    tipRate += (c.pat / c.max) * 0.08 + c.tipBonus + (sh.decor.cay_xanh ? 0.05 : 0) + (present(sh, "cashier") ? 0.1 : 0) + (sh.decor.may_lanh ? 0.05 : 0) + ((R.event && R.event.tip) || 0) + shopEff(sh, "tip") + (S.tipLoc[sh.loc] || 0);
     tipRate *= c.reg ? c.reg.tip : 1;
     if (R.clean < 50) tipRate *= 0.5;
   }
@@ -801,6 +881,7 @@ function resolveServe(c, q, byStaff) {
   if (q === "perfect") { T.perfect++; R.today.perfect++; sh.perfect++; S.totals.perfect++; }
   let dRep = { perfect: 0.6, good: 0.3, ok: -0.2, wrong: -1 }[q];
   if (dRep > 0 && sh.decor.tranh) dRep *= 1.2;
+  if (dRep > 0) dRep *= Math.max(0.3, 1 + shopEff(sh, "rep"));
   if (R.clean < 25) dRep -= 0.2;
   if (c.critic) {
     if (q === "perfect") { dRep += 8; toast("📝 Nhà phê bình chấm quán 5 sao! +8 uy tín", "gold"); }
@@ -813,7 +894,8 @@ function resolveServe(c, q, byStaff) {
     const after = Math.floor(cs.aff / 20);
     if (after > before) { toast(`💖 ${c.reg.name} đã lên ${after} tim!`, "gold"); Sound.sfx("heart"); }
   }
-  if (!sh.staff.cleaner) R.clean = clamp(R.clean - 4, 0, 100);
+  if (!present(sh, "cleaner")) R.clean = clamp(R.clean - 4, 0, 100);
+  staffEvent("pay");
   // Còn ly khác trong cùng order
   if (q !== "wrong" && c.items && c.idx < c.items.length - 1) {
     c.idx++; c.drink = c.items[c.idx];
@@ -845,22 +927,29 @@ function resolveServe(c, q, byStaff) {
   renderTickets(); renderBench(); renderIngredients();
   setTimeout(() => removeCustomer(c), 1300);
   checkGoals(); checkAchv(); renderHud(); renderStats();
+  checkBankrupt();
 }
 
 // ---------- Nhân viên ----------
-function baristaTime(b) { return Math.max(6, 20 - b.skill * 2.5 - (b.trait === "cham" ? 3 : 0)); }
+function baristaTime(b) { return Math.max(5, (20 - b.skill * 2.5) * (1 - effOf(b, "speed"))); }
 function baristaQuality(b) {
-  const r = rand(), pp = 0.55 + b.skill * 0.08 + (b.trait === "can" ? 0.1 : 0);
+  const r = rand(), pp = clamp(0.55 + b.skill * 0.08 + effOf(b, "quality"), 0.2, 0.98);
   return r < pp ? "perfect" : r < pp + (1 - pp) * 0.75 ? "good" : "ok";
 }
-function hasStock(recipe) {
+function hasStock(recipe, sh = shop()) {
   const need = {};
   for (const k of recipe) if (!INGREDIENTS[k].free) need[k] = (need[k] || 0) + 1;
-  return Object.keys(need).every(k => (S.inv[k] || 0) >= need[k]);
+  return Object.keys(need).every(k => (sh.inv[k] || 0) >= need[k]);
 }
-function consume(recipe) { for (const k of recipe) if (!INGREDIENTS[k].free) S.inv[k]--; }
+function consume(recipe, sh = shop()) { for (const k of recipe) if (!INGREDIENTS[k].free) sh.inv[k]--; }
+// Pha chế dùng nguyên liệu: "Tiết kiệm" có thể không tốn, "Vô ý" có thể làm đổ tốn gấp đôi
+function consumeBy(b, recipe, silent, sh = shop()) {
+  if (rand() < effOf(b, "save")) return;
+  consume(recipe, sh);
+  if (rand() < effOf(b, "waste") && hasStock(recipe, sh)) { consume(recipe, sh); if (!silent) toast(`🫗 ${b.name} lỡ tay làm đổ một ly, phải pha lại!`, "bad"); }
+}
 function baristaTick() {
-  const b = shop().staff.barista; if (!b) return;
+  const b = present(shop(), "barista"); if (!b) return;
   if (!R.bJob) {
     const t = R.tickets.find(t => t.id !== R.sel && !t.barista && !(outageNow() && powerDrink(t.drink)));
     if (t) {
@@ -868,8 +957,8 @@ function baristaTick() {
         if (!R.today.shortage.active) { R.today.shortage.active = true; toast(`☕ ${b.name}: "Chị ơi, hết nguyên liệu làm ${DRINKS[t.drink].name} rồi!"`, "bad"); }
         return;
       }
-      consume(DRINKS[t.drink].recipe);
-      t.barista = true; R.bJob = { id: t.id, left: baristaTime(b) };
+      consumeBy(b, DRINKS[t.drink].recipe);
+      t.barista = true; R.bJob = { id: t.id, left: baristaTime(b), total: baristaTime(b) };
       renderTickets(); renderStaff(); renderIngredients();
     }
   } else if (--R.bJob.left <= 0) {
@@ -879,34 +968,34 @@ function baristaTick() {
   }
 }
 function simTick(i) {
-  const sh = S.shops[i], b = sh.staff.barista, T = R.today.shops[i];
+  const sh = S.shops[i], b = present(sh, "barista"), T = R.today.shops[i];
   if (!b) return;
   const sim = R.sim[i] || (R.sim[i] = { q: 0, acc: 0, bAcc: 0 });
   if (R.time < DAY_END) {
     sim.acc += lambda(i, R.time);
     while (sim.acc >= 1) { sim.acc--; if (sim.q < 3 + (sh.decor.ban_ghe || 0)) sim.q++; else T.lost++; }
   } else if (R.time > DAY_END + 30) { T.lost += sim.q; sim.q = 0; }
-  sim.bAcc = Math.min(1.5, sim.bAcc + 1 / baristaTime(b) * (sh.staff.waiter ? 1.1 : 1));
+  sim.bAcc = Math.min(1.5, sim.bAcc + 1 / baristaTime(b) * (present(sh, "waiter") ? 1.1 : 1));
   while (sim.bAcc >= 1 && sim.q > 0) {
     sim.bAcc--; sim.q--;
     const id = pickDrink(i), d = DRINKS[id];
-    if (!hasStock(d.recipe)) { T.lost++; if (!R.today.shortage[i]) { R.today.shortage[i] = true; toast(`📦 Quán ${LOCATIONS[sh.loc].city} báo thiếu nguyên liệu cho ${d.name}!`, "bad"); } continue; }
-    consume(d.recipe);
+    if (!hasStock(d.recipe, sh)) { T.lost++; if (!R.today.shortage[i]) { R.today.shortage[i] = true; toast(`📦 Quán ${LOCATIONS[sh.loc].city} báo thiếu nguyên liệu cho ${d.name}!`, "bad"); } continue; }
+    consumeBy(b, d.recipe, true, sh);
     const q = baristaQuality(b);
     const price = d.price * (LOCATIONS[sh.loc].specialty === id ? 1.2 : 1);
-    let tipRate = { perfect: 0.15, good: 0.06, ok: 0 }[q] + (S.tipLoc[sh.loc] || 0) + (sh.decor.cay_xanh ? 0.05 : 0) + (sh.staff.cashier ? 0.1 : 0) + (hasTrait(sh, "duyen") ? 0.05 : 0) + ((R.event && R.event.tip) || 0);
-    if (!sh.staff.cleaner) tipRate *= 0.6;
+    let tipRate = { perfect: 0.15, good: 0.06, ok: 0 }[q] + (S.tipLoc[sh.loc] || 0) + (sh.decor.cay_xanh ? 0.05 : 0) + (present(sh, "cashier") ? 0.1 : 0) + shopEff(sh, "tip") + ((R.event && R.event.tip) || 0);
+    if (!present(sh, "cleaner")) tipRate *= 0.6;
     const pay = Math.round(price * (q === "ok" ? 0.7 : 1) / 1000) * 1000, tip = Math.round(price * tipRate / 1000) * 1000;
     S.money += pay + tip; S.totals.earned += pay + tip;
     T.revenue += pay; T.tips += tip; T.served++; sh.served++; S.totals.served++;
     if (q === "perfect") { T.perfect++; sh.perfect++; S.totals.perfect++; }
-    sh.rep = clamp(sh.rep + { perfect: 0.15, good: 0.05, ok: -0.1 }[q] * (sh.decor.tranh ? 1.2 : 1), 0, 100);
+    sh.rep = clamp(sh.rep + { perfect: 0.15, good: 0.05, ok: -0.1 }[q] * (sh.decor.tranh ? 1.2 : 1) * Math.max(0.3, 1 + shopEff(sh, "rep")), 0, 100);
   }
 }
 function roleReq(i, role) {
   const sh = S.shops[i], k = ROLE_ORDER.indexOf(role);
   if (k > 0 && !sh.staff[ROLE_ORDER[k - 1]]) return `Cần thuê ${ROLES[ROLE_ORDER[k - 1]].name} trước`;
-  const need = { waiter: 12, cleaner: 22, cashier: 32, barista: 45 }[role] - (i === 0 ? 0 : 10);
+  const need = { waiter: 32, cleaner: 42, cashier: 52, barista: 65 }[role] - (i === 0 ? 0 : 10);
   if (sh.rep < need) return `Uy tín quán cần đạt ${need} (hiện ${Math.floor(sh.rep)})`;
   if (i === 0 && role === "waiter" && S.day < 2) return "Mở khóa từ ngày thứ 2";
   return null;
@@ -916,7 +1005,7 @@ function hire(i, role, idx) {
   S.shops[i].staff[role] = cand;
   R.cands[i][role].splice(idx, 1);
   toast(`🎉 ${cand.name} bắt đầu làm ${ROLES[role].name} tại ${LOCATIONS[S.shops[i].loc].city}!`, "gold");
-  if (role === "barista") toast("☕ Quán đã có pha chế! Giờ Uyên có thể mở quán mới trong mục Chuỗi quán.", "gold");
+  if (role === "barista") toast("☕ Quán đã có pha chế! Giờ Uyên có thể mở chi nhánh mới trong mục Chi nhánh.", "gold");
   Sound.sfx("bell");
   checkAchv(); renderStaff(); renderDockDots(); save(true);
 }
@@ -927,21 +1016,98 @@ function fire(i, role) {
   if (role === "barista" && i !== S.active) R.today.shops[i].open = false;
   renderStaff(); save(true);
 }
+// ---------- Hoạt cảnh nhân viên ----------
+// Uyên, pha chế, thu ngân đứng sau quầy; phục vụ và tạp vụ đi lại ở sảnh chờ của khách
+const STF = { sig: "", list: {} };
+const BROOM = `<svg class="broom" viewBox="0 0 40 100"><rect x="18" y="0" width="5" height="70" rx="2" fill="#9c6644"/><path d="M8,66 h25 l6,30 h-37z" fill="#e9c46a" stroke="#c9a227" stroke-width="2"/><path d="M12,72 l-3,22 M18,72 l-1,22 M24,72 l1,22 M30,72 l3,22" stroke="#c9a227" stroke-width="1.5"/></svg><div class="dust"><i></i><i></i><i></i></div>`;
 function renderStaff() {
-  const layer = $("#staff-layer"); layer.innerHTML = "";
   const sh = shop();
-  const put = (look, x, tag, cls, busy) => {
-    const s = el("div", "staff " + (cls || "") + (busy ? " busy" : ""));
-    s.style.left = x + "px"; s.style.top = 128 + R.E + "px";
-    s.innerHTML = Art.person(look, "happy") + `<div class="tag">${tag}</div><div class="work">☕</div>`;
-    layer.appendChild(s);
-  };
-  put(Art.UYEN, 30, "Bảo Uyên", "uyen", R.drip);
-  if (sh.staff.barista) put(sh.staff.barista.look, 440, "☕ " + sh.staff.barista.name.split(" ").pop(), "", !!R.bJob);
-  if (sh.staff.cashier) put(sh.staff.cashier.look, 895, "💁 " + sh.staff.cashier.name.split(" ").pop());
-  if (sh.staff.waiter) put(sh.staff.waiter.look, 300, "🧑‍🍳 " + sh.staff.waiter.name.split(" ").pop());
-  if (sh.staff.cleaner) put(sh.staff.cleaner.look, 170, "🧹 " + sh.staff.cleaner.name.split(" ").pop());
-  $("#btn-clean").classList.toggle("hidden", !!sh.staff.cleaner);
+  const sig = [S.active, R.E, ...ROLE_ORDER.map(r => { const st = present(sh, r); return st ? st.name : ""; })].join("|");
+  if (sig !== STF.sig) {
+    STF.sig = sig; STF.list = {};
+    $("#staff-layer").innerHTML = ""; $("#lobby-layer").innerHTML = "";
+    const make = (key, look, tag, x, lobby, extra) => {
+      const e = el("div", "staff " + key + (lobby ? " lobby" : ""));
+      e.style.left = x + "px";
+      if (!lobby) e.style.top = 128 + R.E + "px";
+      e.innerHTML = `<div class="pw">${Art.person(look, "happy")}</div>${extra || ""}<div class="tag">${tag}</div><div class="work"></div>`;
+      (lobby ? $("#lobby-layer") : $("#staff-layer")).appendChild(e);
+      STF.list[key] = { el: e, x, arrive: 0, idle: 0, flash: 0 };
+    };
+    const short = st => st.name.split(" ").pop();
+    make("uyen", Art.UYEN, "Bảo Uyên", 30, false);
+    const b = present(sh, "barista"), c = present(sh, "cashier"), w = present(sh, "waiter"), k = present(sh, "cleaner");
+    if (b) make("barista", b.look, "☕ " + short(b), 520, false);
+    if (c) make("cashier", c.look, "💁 " + short(c), 895, false);
+    if (w) make("waiter", w.look, "🧑‍🍳 " + short(w), 760, true);
+    if (k) make("cleaner", k.look, "🧹 " + short(k), 200, true, BROOM);
+  }
+  const u = STF.list.uyen; if (u) setIcon(u, R.drip ? "☕" : "");
+  $("#btn-clean").classList.toggle("hidden", !!present(sh, "cleaner"));
+}
+function setIcon(o, icon) {
+  const w = o.el.querySelector(".work");
+  if (w.textContent !== icon) w.textContent = icon;
+  o.el.classList.toggle("busy", !!icon);
+}
+function moveStaff(o, x, speed) {
+  x = clamp(Math.round(x), 0, 880);
+  const dist = Math.abs(x - o.x);
+  if (dist < 6) return false;
+  const dur = dist / (speed * Math.max(1, R.speed));
+  o.el.style.transition = `left ${dur.toFixed(2)}s linear`;
+  o.el.classList.toggle("left", x < o.x);
+  o.el.classList.add("walking");
+  o.el.style.left = x + "px";
+  o.x = x; o.arrive = performance.now() + dur * 1000;
+  clearTimeout(o.wt); o.wt = setTimeout(() => o.el.classList.remove("walking"), dur * 1000);
+  return true;
+}
+const arrived = o => performance.now() >= o.arrive;
+function staffEvent(type) {
+  const ca = STF.list.cashier;
+  if (type === "pay" && ca) { setIcon(ca, "💵"); ca.flash = performance.now() + 1500; if (Math.abs(ca.x - 895) > 6) moveStaff(ca, 895, 160); }
+}
+function staffTick() {
+  if (R.phase !== "open") return;
+  const now = performance.now(), L = STF.list;
+  // Pha chế: tới chỗ khách nhận phiếu → về máy pha → mang ly ra
+  const b = L.barista;
+  if (b) {
+    const c = R.bJob && R.customers.find(x => x.uid === R.bJob.id);
+    if (c) {
+      const frac = R.bJob.left / (R.bJob.total || 1), cx = custPos(c).x + 10;
+      if (frac > 0.72) { moveStaff(b, cx, 170); setIcon(b, "📝"); }
+      else if (frac > 0.22) { moveStaff(b, 560, 170); setIcon(b, "☕"); b.el.classList.toggle("brewing", arrived(b)); }
+      else { b.el.classList.remove("brewing"); moveStaff(b, cx, 170); setIcon(b, "🥤"); }
+      b.idle = 0;
+    } else {
+      b.el.classList.remove("brewing");
+      if (arrived(b) && now > b.arrive + b.idle) { moveStaff(b, 360 + rand() * 360, 80); setIcon(b, pick(["", "", "🧽", "🎵"])); b.idle = 1500 + rand() * 3000; }
+    }
+  }
+  // Phục vụ: tới cạnh khách đang chờ để ghi order, rảnh thì đi quanh sảnh
+  const w = L.waiter;
+  if (w) {
+    const c = R.customers.find(x => x.state === "order" && !x.tut);
+    if (c) { moveStaff(w, custPos(c).x + 95, 210); setIcon(w, "📝"); w.idle = 0; }
+    else if (arrived(w) && now > w.arrive + w.idle) { moveStaff(w, 60 + rand() * 800, 110); setIcon(w, pick(["", "🍽️", "💬", ""])); w.idle = 2000 + rand() * 3000; }
+  }
+  // Tạp vụ: đi tới lui quét sảnh, dừng lại quét kỹ từng chỗ
+  const k = L.cleaner;
+  if (k && arrived(k) && now > k.arrive + k.idle) {
+    moveStaff(k, 20 + rand() * 840, 55);
+    setIcon(k, pick(["", "", "✨"]));
+    k.idle = 1200 + rand() * 2500;
+  }
+  // Thu ngân: đứng máy tính tiền, thỉnh thoảng đi xếp hàng lên kệ
+  const ca = L.cashier;
+  if (ca && now > ca.flash && arrived(ca) && now > ca.arrive + ca.idle) {
+    if (Math.abs(ca.x - 895) > 6) { moveStaff(ca, 895, 120); setIcon(ca, ""); }
+    else if (rand() < 0.3) { moveStaff(ca, 700 + rand() * 120, 120); setIcon(ca, "📦"); }
+    else setIcon(ca, pick(["", "🧾", ""]));
+    ca.idle = 2500 + rand() * 3500;
+  }
 }
 
 // ---------- Kết thúc ngày ----------
@@ -953,7 +1119,7 @@ function endDay() {
   let net = 0;
   S.shops.forEach((sh, i) => {
     const T = R.today.shops[i], L = LOCATIONS[sh.loc];
-    const wages = ROLE_ORDER.reduce((a, r) => a + (sh.staff[r] ? sh.staff[r].wage : 0), 0);
+    const wages = ROLE_ORDER.reduce((a, r) => a + (present(sh, r) ? sh.staff[r].wage : 0), 0);
     const util = T.open ? 40000 + T.served * 800 + (sh.decor.may_lanh ? 30000 : 0) : 15000;
     const other = 20000 + Object.values(sh.decor).reduce((a, v) => a + v, 0) * 5000;
     const cost = L.rent + wages + util + other;
@@ -962,7 +1128,7 @@ function endDay() {
     rows.push(r); net += r.net;
     // Nhân viên lên tay nghề
     ROLE_ORDER.forEach(role => {
-      const st = sh.staff[role]; if (!st) return;
+      const st = present(sh, role); if (!st) return;
       st.days++;
       if (st.days % 10 === 0 && st.skill < 5) { st.skill++; st.wage = Math.round(st.wage * 1.08 / 5000) * 5000; toast(`⭐ ${st.name} lên tay nghề ${st.skill} sao (lương ${money(st.wage)})`); }
     });
@@ -973,8 +1139,7 @@ function endDay() {
   if (nl && T.lostActive === 0 && T.served > 0) { nl.done = true; S.money += nl.reward; T.bonus += nl.reward; toast(`🎯 Hoàn thành: ${nl.text} (+${money(nl.reward)})`, "gold"); }
   net += T.bonus - T.purchases - T.marketing - T.eventCost;
   // Lãi nợ
-  let interest = 0;
-  if (S.money < 0) { interest = Math.round(-S.money * 0.02 / 1000) * 1000; S.money -= interest; S.debtDays++; net -= interest; } else S.debtDays = 0;
+  const interest = 0;
   S.marketing.forEach(m => m.days--); S.marketing = S.marketing.filter(m => m.days > 0);
   const report = { day: S.day, rows, purchases: T.purchases, marketing: T.marketing, eventCost: T.eventCost, bonus: T.bonus, interest, net, money: S.money };
   S.lastReport = report;
@@ -987,6 +1152,7 @@ function endDay() {
   $("#customers").innerHTML = "";
   try { localStorage.setItem(SAVE_KEY(slot), JSON.stringify({ state: S, run: null, savedAt: Date.now() })); } catch (e) {}
   R.phase = "report";
+  if (S.money <= 0) { R.phase = "open"; gameOver("money"); return; }
   showReport(report, true);
 }
 
@@ -1017,7 +1183,8 @@ function renderHud() {
   $("#hud-clock").textContent = "🕐 " + (R.phase === "open" ? clock(Math.min(R.time, 24 * 60 - 1)) : "--:--");
   $("#hud-weather").textContent = W.icon + " " + W.name;
   $("#hud-shop").textContent = "📍 " + loc(sh).city;
-  $("#hud-rep").innerHTML = `<span class="stars">${stars(sh.rep)}</span> ${Math.floor(sh.rep)}`;
+  $("#hud-rep").innerHTML = `<span class="stars">${stars(sh.rep)}</span> ${Math.ceil(sh.rep)}`;
+  $("#hud-rep").classList.toggle("danger", sh.rep < 10);
   const m = $("#hud-money"); m.textContent = "💰 " + money(S.money); m.classList.toggle("neg", S.money < 0);
   $("#clean-bar").style.width = R.clean + "%";
 }
@@ -1063,9 +1230,10 @@ function renderIngredients() {
   for (const k in INGREDIENTS) {
     const I = INGREDIENTS[k];
     if (I.secret && !S.secrets[I.secret]) continue;
+    if (I.only && !I.only.includes(shop().loc)) continue;
     const avail = ingAvail(k);
     const b = el("button", "ing" + (avail ? "" : " locked"));
-    const q = I.free ? "∞" : (S.inv[k] || 0);
+    const q = I.free ? "∞" : (shop().inv[k] || 0);
     b.innerHTML = `<div class="ic" style="background:${I.color}">${avail ? I.icon : "🔒"}</div><div class="nm">${I.name}</div>${avail ? `<span class="qty ${!I.free && q < 5 ? "low" : ""}">${q}</span>` : ""}`;
     b.disabled = R.drip;
     b.title = avail ? `${I.name}${I.free ? "" : " — còn " + q}` : `Cần ${EQUIPMENT[I.equip] ? EQUIPMENT[I.equip].name : "mở khóa"}`;
@@ -1097,11 +1265,12 @@ function renderDockDots() {
   const dot = (panel, on) => { const b = document.querySelector(`[data-panel="${panel}"]`); const d = b.querySelector(".dot"); if (on && !d) b.appendChild(el("i", "dot")); if (!on && d) d.remove(); };
   dot("staff", S.shops.some((sh, i) => ROLE_ORDER.some(r => !sh.staff[r] && !roleReq(i, r))));
   dot("chain", canExpand() === null);
-  dot("kho", Object.keys(INGREDIENTS).some(k => ingAvail(k) && !INGREDIENTS[k].free && (S.inv[k] || 0) < 5));
+  dot("kho", Object.keys(INGREDIENTS).some(k => ingAvail(k) && !INGREDIENTS[k].free && (shop().inv[k] || 0) < 5));
 }
 // Đang tạm dừng: khóa mọi thao tác pha chế, phục vụ, nhận order
 const isPaused = () => R.phase === "open" && R.paused;
 function setPauseUI() {
+  $("#stage").classList.toggle("is-paused", isPaused());
   $("#btn-pause").textContent = R.paused ? "▶" : "⏸";
   $("#pause-cover").classList.toggle("hidden", !isPaused());
   if (isPaused()) closeDialog();
@@ -1261,11 +1430,44 @@ function showReady() {
 }
 
 // ---------- Màn hình chuẩn bị ----------
+function expectedCosts() {
+  return S.shops.reduce((a, sh) => a + LOCATIONS[sh.loc].rent + 60000 + ROLE_ORDER.reduce((w, r) => w + (sh.staff[r] ? sh.staff[r].wage : 0), 0), 0);
+}
 function canExpand() {
-  if (S.shops.length >= LOCATION_ORDER.length) return "Đã phủ khắp 6 thành phố!";
+  if (S.shops.length >= Object.keys(LOCATIONS).length) return "Đã phủ khắp 6 thành phố!";
   const nb = S.shops.findIndex(sh => !sh.staff.barista);
   if (nb >= 0) return `Quán ${LOCATIONS[S.shops[nb].loc].city} cần có nhân viên Pha chế trước khi Uyên rời đi.`;
+  const wait = (S.lastOpenDay || 1) + MIN_DAYS_BETWEEN_SHOPS - S.day;
+  if (wait > 0) return `Cần thêm ${wait} ngày nữa (mỗi quán mới cách quán trước ít nhất ${MIN_DAYS_BETWEEN_SHOPS} ngày).`;
   return null;
+}
+function confirmOpen(l) {
+  const L = LOCATIONS[l];
+  const local = Object.keys(DRINKS).filter(id => DRINKS[id].only === l).map(id => DRINKS[id].name).join(", ");
+  openModal(`🏗️ Mở chi nhánh ${L.city}?`, `<div class="intro-wrap"><div class="portrait">${Art.person(Art.UYEN, "wow")}</div><div class="intro-text" style="font-size:19px">
+    Uyên có muốn mở <b>${L.name}</b> ở <b>${L.city}</b> không?
+    <ul style="margin:10px 0">
+      <li>💰 Trừ <b>${money(L.cost)}</b> vào két chung (còn lại ${money(S.money - L.cost)})</li>
+      <li>🏠 Tiền thuê ${money(L.rent)}/ngày</li>
+      <li>📦 Kho riêng với nguyên liệu khởi đầu; 🛠️ máy móc riêng, phải mua lại cho quán mới</li>
+      <li>🏙️ Món địa phương: ${local}</li>
+      <li>☕ Hôm nay Uyên sẽ chuyển sang đứng quầy ở quán mới</li>
+    </ul>
+    <div class="row"><button class="btn big teal" id="co-yes">✅ Mở quán</button><button class="btn big gray" id="co-no">Để sau</button></div></div></div>`, { noClose: true });
+  $("#co-no").onclick = () => PANELS.chain(l);
+  $("#co-yes").onclick = () => {
+    if (!canAfford(L.cost) || canExpand()) return;
+    S.money -= L.cost; S.lastOpenDay = S.day;
+    S.shops.push(newShop(l, false));
+    const idx = S.shops.length - 1;
+    R.weatherBy[l] = rollWeather(l);
+    R.today.shops[idx] = { served: 0, perfect: 0, lost: 0, revenue: 0, tips: 0, open: true };
+    R.today.purchases += L.cost;
+    R.cands[idx] = {}; ROLE_ORDER.forEach(r => R.cands[idx][r] = [genCandidate(r), genCandidate(r), genCandidate(r)]);
+    S.active = idx;
+    toast(`🎊 Khai trương chi nhánh ${L.city}! Khách ruột mới đang chờ Uyên ở đây.`, "gold"); Sound.sfx("day");
+    checkAchv(); buildScene(); renderAll(); save(true); showPrepare();
+  };
 }
 function showPrepare() {
   R.phase = "prepare";
@@ -1284,17 +1486,28 @@ function showPrepare() {
   const body = openModal(`☀️ Ngày ${S.day} — ${weekday(S.day)}`, `
     <div class="row"><span class="pill">${W.icon} ${loc().city}: ${W.name}</span>${weekend}<span class="pill">💰 ${money(S.money)}</span>
       ${S.marketing.map(m => `<span class="pill green">📣 ${MARKETING[m.id].name} (còn ${m.days} ngày)</span>`).join("")}</div>
+    ${S.money < expectedCosts() * 1.2 ? `<div class="card" style="background:#ffe5e5"><h4>⚠️ Két tiền sắp cạn</h4><div>Chi phí cố định cuối ngày khoảng <b>${money(expectedCosts())}</b> (thuê mặt bằng, lương, điện nước) — két hiện có ${money(S.money)}. Két về 0 hoặc âm là phá sản!</div></div>` : ""}
     <h3>Sự kiện hôm nay</h3>${ev}
+    ${R.away && R.away.length ? `<div class="card" style="margin-top:8px"><h4>🛌 Nhân viên xin nghỉ hôm nay</h4><div class="sub">${R.away.join(", ")}</div></div>` : ""}
     <h3>Hôm nay Uyên đứng quầy ở đâu?</h3><div class="grid">${shopsHtml}</div>
     <h3>🎯 Mục tiêu</h3>${R.goals.map(g => `<div class="goal"><span>⬜ ${g.text}</span><span class="rw">+${money(g.reward)}</span></div>`).join("")}
     <div class="row" style="margin-top:16px">
       <button class="btn gray" data-go="kho">📦 Nhập kho</button><button class="btn gray" data-go="staff">👥 Nhân viên</button>
-      <button class="btn gray" data-go="chain">🏪 Chuỗi quán</button><button class="btn gray" data-go="menu">📜 Thực đơn</button>
+      <button class="btn gray" data-go="chain">🗺️ Chi nhánh</button><button class="btn gray" data-go="menu">📜 Thực đơn</button>
       <span class="spacer"></span><button class="btn big teal" id="p-open">🔓 Mở cửa!</button>
     </div>`, { noClose: true, panel: "prepare" });
   on(body, "[data-stand]", "click", c => { S.active = +c.dataset.stand; buildScene(); renderAll(); showPrepare(); });
-  on(body, "[data-go]", "click", b => PANELS[b.dataset.go]());
+  on(body, "[data-go]", "click", b => { khoTab = menuTab = staffTab = decorTab = S.active; PANELS[b.dataset.go](); });
   $("#p-open").onclick = openDay;
+  const affordable = Object.keys(LOCATIONS).filter(l => !S.shops.some(sh => sh.loc === l) && canAfford(LOCATIONS[l].cost));
+  if (!R.expandAsked && canExpand() === null && affordable.length) {
+    R.expandAsked = true;
+    openModal("🎉 Đủ điều kiện mở chi nhánh mới!", `<div class="intro-wrap"><div class="portrait">${Art.person(Art.UYEN, "happy")}</div><div class="intro-text">
+      Két đã đủ tiền và các quán đều có Pha chế. Uyên có muốn mở thêm một chi nhánh không?<p class="sub">Có thể mở: ${affordable.map(l => `${LOCATIONS[l].city} (${money(LOCATIONS[l].cost)})`).join(", ")}</p>
+      <div class="row"><button class="btn big teal" id="ex-yes">🗺️ Xem bản đồ chọn quán</button><button class="btn big gray" id="ex-no">Để sau</button></div></div></div>`, { noClose: true });
+    $("#ex-yes").onclick = () => PANELS.chain();
+    $("#ex-no").onclick = () => showPrepare();
+  }
 }
 
 // ---------- Báo cáo ----------
@@ -1330,51 +1543,66 @@ function showReport(r, isEnd) {
     ${r ? reportTable(r) : '<p>Chưa có báo cáo nào.</p>'}
     <h3>📈 Doanh thu 14 ngày gần nhất</h3>${chartSvg()}
     <div class="row" style="margin-top:10px"><span class="pill">💰 Két: ${money(S.money)}</span><span class="pill">☕ Tổng ly: ${S.totals.served}</span><span class="pill">🌟 Hoàn hảo: ${S.totals.perfect}</span><span class="pill">💵 Tổng thu: ${money(S.totals.earned)}</span>
-      ${S.money < 0 ? `<span class="pill red">⚠️ Két đang âm — ngân hàng tính lãi 2% mỗi ngày!</span>` : ""}
+      ${S.money < expectedCosts() ? `<span class="pill red">⚠️ Két sắp cạn — về 0 là phá sản!</span>` : ""}
       <span class="spacer"></span>${isEnd ? `<button class="btn big teal" id="r-next">☀️ Sang ngày ${S.day}</button>` : ""}</div>`, { noClose: isEnd, panel: isEnd ? "" : "report" });
   if (isEnd) $("#r-next").onclick = () => prepareDay();
 }
 
 // ---------- Các bảng chức năng ----------
-let staffTab = 0, decorTab = 0;
+let staffTab = 0, decorTab = 0, khoTab = 0, menuTab = 0;
+const shopTabs = cur => S.shops.length > 1 ? `<div class="tabbar">${S.shops.map((s, k) => `<button class="${k === cur ? "on" : ""}" data-tab="${k}">📍 ${LOCATIONS[s.loc].city}${k === S.active ? " ⭐" : ""}</button>`).join("")}</div>` : "";
 const PANELS = {
   kho() {
-    const cashier = S.shops.some(sh => sh.staff.cashier);
-    const items = Object.keys(INGREDIENTS).filter(k => !INGREDIENTS[k].free && ingAvail(k)).map(k => {
-      const I = INGREDIENTS[k], p = ingPrice(k), q = S.inv[k] || 0;
+    khoTab = clamp(khoTab, 0, S.shops.length - 1);
+    const sh = S.shops[khoTab], city = LOCATIONS[sh.loc].city;
+    const cashier = !!sh.staff.cashier;
+    const items = Object.keys(INGREDIENTS).filter(k => !INGREDIENTS[k].free && ingAvail(k, sh)).map(k => {
+      const I = INGREDIENTS[k], p = ingPrice(k), q = sh.inv[k] || 0;
       return `<div class="card"><div class="row"><div class="ing" style="box-shadow:none;padding:0"><div class="ic" style="background:${I.color}">${I.icon}</div></div>
-        <div><h4>${I.name}</h4><div class="sub">Còn <b style="color:${q < 5 ? "#e63946" : "#1f776c"}">${q}</b> phần · ${money(p)}/phần</div></div></div>
+        <div><h4>${I.name}${I.only ? ' <span class="pill green">Đặc sản</span>' : ""}</h4><div class="sub">Còn <b style="color:${q < 5 ? "#e63946" : "#1f776c"}">${q}</b> phần · ${money(p)}/phần</div></div></div>
         <div class="row" style="margin-top:6px"><button class="btn teal" data-buy="${k}" data-n="10">+10 (${shortMoney(p * 10)})</button><button class="btn" data-buy="${k}" data-n="30">+30 (${shortMoney(p * 30)})</button></div>
-        ${cashier ? `<div class="row qtybtns" style="margin-top:6px"><span class="sub">Mức tự nhập: <b>${S.target[k] || 0}</b></span><button data-tg="${k}" data-d="-10">−</button><button data-tg="${k}" data-d="10">+</button></div>` : ""}</div>`;
+        ${cashier ? `<div class="row qtybtns" style="margin-top:6px"><span class="sub">Mức tự nhập: <b>${sh.target[k] || 0}</b></span><button data-tg="${k}" data-d="-10">−</button><button data-tg="${k}" data-d="10">+</button></div>` : ""}</div>`;
     }).join("");
-    const body = openModal("📦 Kho nguyên liệu (dùng chung toàn chuỗi)", `
-      <p>Nguyên liệu được chia sẻ cho tất cả các quán. ${R.event && (R.event.discount || R.event.priceUp) ? `<span class="pill ${R.event.discount ? "green" : "red"}">${R.event.icon} ${R.event.name}</span>` : ""}
-      ${cashier ? "<span class='pill green'>💁 Thu ngân sẽ tự nhập đến “mức tự nhập” mỗi sáng</span>" : "<span class='pill'>Thuê Thu ngân để tự động nhập kho mỗi sáng</span>"}</p>
+    const body = openModal(`📦 Kho nguyên liệu — quán ${city}`, `${shopTabs(khoTab)}
+      <p>Mỗi quán có kho riêng; tiền nhập hàng trừ vào két chung. ${R.event && (R.event.discount || R.event.priceUp) ? `<span class="pill ${R.event.discount ? "green" : "red"}">${R.event.icon} ${R.event.name}</span>` : ""}
+      ${cashier ? "<span class='pill green'>💁 Thu ngân quán này tự nhập đến “mức tự nhập” mỗi sáng</span>" : "<span class='pill'>Thuê Thu ngân ở quán này để tự động nhập kho mỗi sáng</span>"}</p>
       <div class="row"><button class="btn teal" id="k-fill">🛒 Nhập đủ tất cả lên 30 phần</button><span class="sub">Đá và nước nóng miễn phí.</span></div>
       <div class="grid" style="margin-top:10px">${items}</div>`, { panel: "kho" });
-    on(body, "[data-buy]", "click", b => buy(b.dataset.buy, +b.dataset.n));
-    on(body, "[data-tg]", "click", b => { const k = b.dataset.tg; S.target[k] = clamp((S.target[k] || 0) + +b.dataset.d, 0, 200); refreshPanel(); });
-    $("#k-fill").onclick = () => { Object.keys(INGREDIENTS).filter(k => !INGREDIENTS[k].free && ingAvail(k)).forEach(k => { const need = 30 - (S.inv[k] || 0); if (need > 0) buy(k, need, true); }); refreshPanel(); };
+    on(body, "[data-tab]", "click", b => { khoTab = +b.dataset.tab; refreshPanel(); });
+    on(body, "[data-buy]", "click", b => buy(b.dataset.buy, +b.dataset.n, false, sh));
+    on(body, "[data-tg]", "click", b => { const k = b.dataset.tg; sh.target[k] = clamp((sh.target[k] || 0) + +b.dataset.d, 0, 200); refreshPanel(); });
+    $("#k-fill").onclick = () => { Object.keys(INGREDIENTS).filter(k => !INGREDIENTS[k].free && ingAvail(k, sh)).forEach(k => { const need = 30 - (sh.inv[k] || 0); if (need > 0) buy(k, need, true, sh); }); refreshPanel(); };
+  },
+  board() {
+    const n = menuList().length;
+    openModal(`📜 Thực đơn đang bán — quán ${loc().city} (${n} món)`, `<p class="sub">Bấm nguyên liệu đúng thứ tự để được “Hoàn hảo”. Món đặc sản của thành phố bán giá cao hơn 20%. Món 🏙️ địa phương chỉ có ở quán này.</p>${sellingHtml()}
+      <div class="row" style="margin-top:12px"><span class="spacer"></span><button class="btn gray" id="b-more">🛠️ Mua máy để mở thêm món</button></div>`, { panel: "board" });
+    $("#b-more").onclick = () => { menuTab = S.active; PANELS.menu(); };
   },
   menu() {
-    const drinks = Object.keys(DRINKS).map(id => {
-      const d = DRINKS[id], ok = drinkAvail(id);
+    menuTab = clamp(menuTab, 0, S.shops.length - 1);
+    const sh = S.shops[menuTab], city = LOCATIONS[sh.loc].city;
+    const locked = Object.keys(DRINKS).filter(id => !drinkAvail(id, sh) && (!DRINKS[id].only || DRINKS[id].only === sh.loc)).map(id => {
+      const d = DRINKS[id];
       if (d.secret && !S.secrets[id]) return `<div class="card locked"><h4>❓ Công thức bí mật</h4><div class="sub">Một khách ruột sẽ truyền dạy khi đủ thân thiết.</div></div>`;
-      const spec = Object.values(LOCATIONS).filter(L => L.specialty === id).map(L => L.city);
-      return `<div class="card ${ok ? "" : "locked"}"><div class="row"><div style="width:60px;height:60px">${Art.drinkIcon(id)}</div><div><h4>${d.name}</h4><div class="sub">${money(d.price)} · ${d.hot ? "♨️ nóng" : "🧊 lạnh"}${spec.length ? " · Đặc sản " + spec.join(", ") : ""}</div></div></div>
-        <div style="margin-top:6px">${d.recipe.map(k => `<span class="pill">${INGREDIENTS[k].icon} ${INGREDIENTS[k].name}</span>`).join(" → ")}</div>
-        ${ok ? "" : `<div class="sub" style="margin-top:4px">🔒 Cần: ${EQUIPMENT[d.equip].name}</div>`}</div>`;
+      return `<div class="card locked"><div class="row"><div style="width:60px;height:60px">${Art.drinkIcon(id)}</div><div><h4>${d.name}</h4><div class="sub">${money(d.price)} · 🔒 Cần: ${d.equip ? EQUIPMENT[d.equip].name : "công thức"}</div></div></div></div>`;
     }).join("");
+    const elsewhere = Object.keys(DRINKS).filter(id => DRINKS[id].only && DRINKS[id].only !== sh.loc).map(id => `<span class="pill">${DRINKS[id].name} · ${LOCATIONS[DRINKS[id].only].city}</span>`).join(" ");
     const eq = Object.keys(EQUIPMENT).map(id => {
-      const E = EQUIPMENT[id], own = S.equip[id];
-      return `<div class="card ${own ? "owned" : ""}"><h4>${E.name}</h4><div class="sub">${E.desc}</div><div class="row" style="margin-top:6px">${own ? '<span class="pill green">✔ Đã có (dùng cho cả chuỗi)</span>' : `<button class="btn" data-eq="${id}" ${S.money < E.price ? "disabled" : ""}>Mua ${money(E.price)}</button>`}</div></div>`;
+      const E = EQUIPMENT[id], own = sh.equip[id];
+      return `<div class="card ${own ? "owned" : ""}"><h4>${E.name}</h4><div class="sub">${E.desc}</div><div class="row" style="margin-top:6px">${own ? `<span class="pill green">✔ Quán ${city} đã có</span>` : `<button class="btn" data-eq="${id}" ${!canAfford(E.price) ? "disabled" : ""}>Mua cho quán ${city} · ${money(E.price)}</button>`}</div></div>`;
     }).join("");
-    const body = openModal("📜 Thực đơn & Máy móc", `<h3>🛠️ Máy móc</h3><div class="grid">${eq}</div><h3>☕ Sổ công thức</h3><p class="sub">Bấm nguyên liệu đúng thứ tự để được “Hoàn hảo”. Đúng nguyên liệu nhưng sai thứ tự chỉ được “Ngon”.</p><div class="grid">${drinks}</div>`, { panel: "menu" });
+    const body = openModal(`📜 Thực đơn & Máy móc — quán ${city}`, `${shopTabs(menuTab)}
+      <h3>☕ Đang bán (${menuList(sh).length} món)</h3><p class="sub">Bấm nguyên liệu đúng thứ tự để được “Hoàn hảo”. Đúng nguyên liệu nhưng sai thứ tự chỉ được “Ngon”.</p>${sellingHtml(sh)}
+      <h3>🛠️ Máy móc của quán ${city}</h3><p class="sub">Mỗi quán mua máy riêng.</p><div class="grid">${eq}</div>
+      ${locked ? `<h3>🔒 Chưa mở khóa ở quán này</h3><div class="grid">${locked}</div>` : ""}
+      <h3>🏙️ Món địa phương ở thành phố khác</h3><p class="sub">Mở quán ở các thành phố này để bán thêm món: ${elsewhere}</p>`, { panel: "menu" });
+    on(body, "[data-tab]", "click", b => { menuTab = +b.dataset.tab; refreshPanel(); });
     on(body, "[data-eq]", "click", b => {
       const id = b.dataset.eq, E = EQUIPMENT[id];
-      if (S.money < E.price) return;
-      S.money -= E.price; R.today.purchases += E.price; S.equip[id] = true;
-      toast(`🛠️ Đã mua ${E.name}!`, "gold"); Sound.sfx("coin");
+      if (!canAfford(E.price)) return;
+      S.money -= E.price; R.today.purchases += E.price; sh.equip[id] = true;
+      toast(`🛠️ Quán ${city} đã có ${E.name}!`, "gold"); Sound.sfx("coin");
       renderIngredients(); renderHud(); save(true); refreshPanel();
     });
   },
@@ -1382,23 +1610,35 @@ const PANELS = {
     staffTab = clamp(staffTab, 0, S.shops.length - 1);
     const i = staffTab, sh = S.shops[i];
     const tabs = S.shops.map((s, k) => `<button class="${k === i ? "on" : ""}" data-tab="${k}">📍 ${LOCATIONS[s.loc].city}</button>`).join("");
-    const trait = id => TRAITS.find(t => t.id === id);
+    const pills = x => (x.perks || []).map(k => PERKS[k] && `<span class="pill green" title="${PERKS[k].desc}">${PERKS[k].icon} ${PERKS[k].name}</span>`).join("")
+      + (x.flaws || []).map(k => FLAWS[k] && `<span class="pill red" title="${FLAWS[k].desc}">${FLAWS[k].icon} ${FLAWS[k].name}</span>`).join("");
+    const details = x => staffTraits(x).map(t => `<div class="trait-line">${t.icon} ${t.desc}</div>`).join("");
+    const stars5 = n => `<span class="stars">${"★".repeat(n)}${"☆".repeat(5 - n)}</span>`;
     const slots = ROLE_ORDER.map(role => {
       const R0 = ROLES[role], st = sh.staff[role], req = roleReq(i, role);
-      if (st) return `<div class="slot"><div class="avatar-sm">${Art.person(st.look, "happy")}</div><div class="info"><b>${R0.icon} ${R0.name}: ${st.name}</b> <span class="stars">${"★".repeat(st.skill)}${"☆".repeat(5 - st.skill)}</span><br>
-        <span class="pill">${trait(st.trait).name}: ${trait(st.trait).desc}</span><span class="pill">Lương ${money(st.wage)}/ngày</span><span class="pill">Đã làm ${st.days} ngày</span><br><span class="sub">${R0.desc}</span></div>
+      if (st) return `<div class="slot"><div class="avatar-sm">${Art.person(st.look, "happy")}</div><div class="info"><b>${R0.icon} ${R0.name}: ${st.name}</b> ${stars5(st.skill)} ${st.absent ? '<span class="pill red">🛌 Hôm nay xin nghỉ</span>' : ""}<br>
+        ${pills(st)}<span class="pill">Lương ${money(st.wage)}/ngày</span><span class="pill">Đã làm ${st.days} ngày</span>
+        <div class="sub">${R0.desc}</div>${details(st)}</div>
         <button class="btn gray" data-fire="${role}">Cho nghỉ</button></div>`;
       if (req) return `<div class="slot" style="opacity:.6"><div class="avatar-sm" style="font-size:40px;align-items:center">🔒</div><div class="info"><b>${R0.icon} ${R0.name}</b><br><span class="sub">${R0.desc}</span><br><span class="pill red">${req}</span></div></div>`;
       const cands = (R.cands[i] && R.cands[i][role]) || [];
-      return `<div class="slot" style="flex-direction:column;align-items:stretch"><div><b>${R0.icon} Tuyển ${R0.name}</b> <span class="sub">— ${R0.desc}</span></div>
-        <div class="grid">${cands.map((c, k) => `<div class="card"><div class="row"><div class="avatar-sm">${Art.person(c.look, "happy")}</div><div><h4>${c.name}</h4><span class="stars">${"★".repeat(c.skill)}${"☆".repeat(5 - c.skill)}</span><br><span class="pill">${trait(c.trait).name}</span></div></div>
-          <div class="row" style="margin-top:6px"><span class="sub">Lương ${money(c.wage)}/ngày</span><span class="spacer"></span><button class="btn teal" data-hire="${role}" data-k="${k}">Thuê</button></div></div>`).join("") || '<span class="sub">Hết ứng viên hôm nay, quay lại ngày mai.</span>'}</div></div>`;
+      return `<div class="slot" style="flex-direction:column;align-items:stretch"><div class="row"><b>${R0.icon} Tuyển ${R0.name}</b> <span class="sub">— ${R0.desc}</span><span class="spacer"></span>
+          <button class="btn gray" data-reroll="${role}" ${!canAfford(REROLL_COST) ? "disabled" : ""}>🔄 Tìm ứng viên khác (${money(REROLL_COST)})</button></div>
+        <div class="grid cand-grid">${cands.map((c, k) => `<div class="card cand"><div class="row"><div class="avatar-sm">${Art.person(c.look, "happy")}</div><div><h4>${c.name}</h4>${stars5(c.skill)}<div>${pills(c)}</div></div></div>
+          <div style="margin-top:6px">${details(c)}</div>
+          <div class="row" style="margin-top:6px"><b>Lương ${money(c.wage)}/ngày</b><span class="spacer"></span><button class="btn teal" data-hire="${role}" data-k="${k}">Thuê</button></div></div>`).join("") || '<span class="sub">Hết ứng viên hôm nay, quay lại ngày mai hoặc tìm thêm.</span>'}</div></div>`;
     }).join("");
     const body = openModal("👥 Nhân viên", `<div class="tabbar">${tabs}</div>
-      <p class="sub">Thứ tự tuyển: Phục vụ → Tạp vụ → Thu ngân → <b>Pha chế (cuối cùng)</b>. Khi quán có Pha chế, quán có thể tự vận hành và Uyên được mở quán mới. Lương trả cuối mỗi ngày; nhân viên lên tay nghề sau mỗi 10 ngày.</p>${slots}`, { panel: "staff" });
+      <p class="sub">Thứ tự tuyển: Phục vụ → Tạp vụ → Thu ngân → <b>Pha chế (cuối cùng)</b>. Mỗi vị trí có tối đa 3 ứng viên, mỗi người có ưu điểm (xanh) và có thể kèm nhược điểm (đỏ). Lương trả cuối mỗi ngày; nhân viên lên tay nghề sau mỗi 10 ngày.</p>${slots}`, { panel: "staff" });
     on(body, "[data-tab]", "click", b => { staffTab = +b.dataset.tab; refreshPanel(); });
     on(body, "[data-hire]", "click", b => { hire(i, b.dataset.hire, +b.dataset.k); refreshPanel(); });
     on(body, "[data-fire]", "click", b => { fire(i, b.dataset.fire); refreshPanel(); });
+    on(body, "[data-reroll]", "click", b => {
+      if (!canAfford(REROLL_COST)) return;
+      S.money -= REROLL_COST; R.today.purchases += REROLL_COST;
+      R.cands[i][b.dataset.reroll] = [genCandidate(b.dataset.reroll), genCandidate(b.dataset.reroll), genCandidate(b.dataset.reroll)];
+      Sound.sfx("coin"); renderHud(); refreshPanel();
+    });
   },
   decor() {
     decorTab = clamp(decorTab, 0, S.shops.length - 1);
@@ -1407,13 +1647,13 @@ const PANELS = {
     const items = Object.keys(DECOR).map(id => {
       const D = DECOR[id], lv = sh.decor[id] || 0, price = D.price * (lv + 1);
       return `<div class="card ${lv >= D.max ? "owned" : ""}"><h4>${D.name} ${D.max > 1 ? `<span class="sub">cấp ${lv}/${D.max}</span>` : ""}</h4><div class="sub">${D.desc}</div>
-        <div class="row" style="margin-top:6px">${lv >= D.max ? '<span class="pill green">✔ Đã lắp</span>' : `<button class="btn" data-dec="${id}" ${S.money < price ? "disabled" : ""}>Mua ${money(price)}</button>`}</div></div>`;
+        <div class="row" style="margin-top:6px">${lv >= D.max ? '<span class="pill green">✔ Đã lắp</span>' : `<button class="btn" data-dec="${id}" ${!canAfford(price) ? "disabled" : ""}>Mua ${money(price)}</button>`}</div></div>`;
     }).join("");
     const body = openModal("🪴 Trang trí quán", `<div class="tabbar">${tabs}</div><p class="sub">Mỗi món trang trí tốn thêm 5.000đ/ngày bảo trì.</p><div class="grid">${items}</div>`, { panel: "decor" });
     on(body, "[data-tab]", "click", b => { decorTab = +b.dataset.tab; refreshPanel(); });
     on(body, "[data-dec]", "click", b => {
       const id = b.dataset.dec, lv = sh.decor[id] || 0, price = DECOR[id].price * (lv + 1);
-      if (S.money < price) return;
+      if (!canAfford(price)) return;
       S.money -= price; R.today.purchases += price; sh.decor[id] = lv + 1;
       toast(`🪴 Đã lắp ${DECOR[id].name}!`, "gold"); Sound.sfx("coin");
       if (i === S.active) buildScene();
@@ -1423,52 +1663,79 @@ const PANELS = {
   ads() {
     const items = Object.keys(MARKETING).map(id => {
       const M = MARKETING[id], act = S.marketing.find(m => m.id === id);
-      return `<div class="card ${act ? "owned" : ""}"><h4>📣 ${M.name}</h4><div class="sub">${M.desc}</div><div class="row" style="margin-top:6px">${act ? `<span class="pill green">Đang chạy, còn ${act.days} ngày</span>` : `<button class="btn" data-ad="${id}" ${S.money < M.price ? "disabled" : ""}>Chạy ${money(M.price)}</button>`}</div></div>`;
+      return `<div class="card ${act ? "owned" : ""}"><h4>📣 ${M.name}</h4><div class="sub">${M.desc}</div><div class="row" style="margin-top:6px">${act ? `<span class="pill green">Đang chạy, còn ${act.days} ngày</span>` : `<button class="btn" data-ad="${id}" ${!canAfford(M.price) ? "disabled" : ""}>Chạy ${money(M.price)}</button>`}</div></div>`;
     }).join("");
     const body = openModal("📣 Quảng cáo", `<p class="sub">Quảng cáo tăng lượng khách. Mời TikToker còn có thể khiến một vị khách đặc biệt ghé quán sớm hơn...</p><div class="grid">${items}</div>`, { panel: "ads" });
     on(body, "[data-ad]", "click", b => {
       const id = b.dataset.ad, M = MARKETING[id];
-      if (S.money < M.price) return;
+      if (!canAfford(M.price)) return;
       S.money -= M.price; R.today.marketing += M.price;
       S.marketing.push({ id, days: M.days, boost: M.boost, scope: M.scope });
       toast(`📣 Bắt đầu chiến dịch: ${M.name}`, "gold"); Sound.sfx("coin");
       renderHud(); save(true); refreshPanel();
     });
   },
-  chain() {
-    const shops = S.shops.map((sh, i) => {
-      const L = LOCATIONS[sh.loc], T = R.today && R.today.shops[i];
-      const staff = ROLE_ORDER.map(r => sh.staff[r] ? ROLES[r].icon : "▫️").join(" ");
-      return `<div class="card ${i === S.active ? "owned" : ""}"><h4>📍 ${L.city} — ${L.name}</h4><div class="sub">${L.desc}</div>
-        <div><span class="stars">${stars(sh.rep)}</span> ${Math.floor(sh.rep)} uy tín · Thuê ${money(L.rent)}/ngày</div>
-        <div>Nhân viên: ${staff}</div>
-        <div class="sub">Hôm nay: ${T ? `${T.served} ly · ${money(T.revenue + T.tips)}` : "-"} · Tổng: ${sh.served} ly</div>
-        <div>${i === S.active ? '<span class="pill green">Uyên đang ở đây</span>' : sh.staff.barista ? '<span class="pill">☕ Tự vận hành</span>' : '<span class="pill red">Đóng khi Uyên vắng</span>'}</div></div>`;
-    }).join("");
+  chain(sel) {
     const reason = canExpand();
-    const next = LOCATION_ORDER.filter(l => !S.shops.some(sh => sh.loc === l)).map((l, k) => {
-      const L = LOCATIONS[l];
-      const can = !reason && k === 0 && S.money >= L.cost && R.phase === "prepare";
-      return `<div class="card ${k ? "locked" : ""}"><h4>🏗️ ${L.city} — ${L.name}</h4><div class="sub">${L.desc}</div>
-        <div><span class="pill">Chi phí mở: ${money(L.cost)}</span><span class="pill">Thuê ${money(L.rent)}/ngày</span><span class="pill">Lượng khách ×${L.flow}</span><span class="pill">Đặc sản: ${DRINKS[L.specialty].name}</span></div>
-        ${k === 0 ? `<div class="row" style="margin-top:6px"><button class="btn teal" data-open="${l}" ${can ? "" : "disabled"}>Mở quán</button><span class="sub">${reason || (S.money < L.cost ? "Chưa đủ tiền" : R.phase !== "prepare" ? "Chỉ mở được vào đầu ngày" : "Sẵn sàng!")}</span></div>` : '<div class="sub">Mở quán trước đó để mở khóa</div>'}</div>`;
+    const owned = l => S.shops.findIndex(sh => sh.loc === l);
+    const P = ([lon, lat]) => [(lon - 101.6) * 40, (23.7 - lat) * 40];
+    const land = VN_OUTLINE.map(P).map(([x, y]) => x.toFixed(1) + "," + y.toFixed(1)).join(" ");
+    const pins = Object.keys(GEO).map(l => {
+      const [x, y] = P(GEO[l]), L = LOCATIONS[l], k = owned(l);
+      const state = k >= 0 ? "owned" : !reason && canAfford(L.cost) && R.phase === "prepare" ? "ready" : "locked";
+      const right = !["hanoi", "hue", "danang"].includes(l);
+      const lx = right ? x + 16 : x - 16, anchor = right ? "start" : "end";
+      const dy = l === "hue" ? -14 : l === "danang" ? 18 : l === "hoian" ? 26 : 0;
+      return `<g class="pin ${state} ${sel === l ? "sel" : ""}" data-city="${l}" transform="translate(${x.toFixed(1)} ${y.toFixed(1)})">
+        <circle r="15" class="pin-halo"/><circle r="11" class="pin-dot"/><text y="5" text-anchor="middle" font-size="13">${k >= 0 ? "☕" : state === "ready" ? "✨" : "📍"}</text>
+        <g transform="translate(${lx - x} ${dy})"><rect x="${right ? -4 : -150}" y="-15" width="154" height="${k >= 0 ? 24 : 40}" rx="8" class="pin-label"/>
+          <text x="${right ? 4 : -4}" y="2" text-anchor="${anchor}" class="pin-name">${L.city}${k === S.active ? " ⭐" : ""}</text>
+          ${k >= 0 ? "" : `<text x="${right ? 4 : -4}" y="18" text-anchor="${anchor}" class="pin-cost">${money(L.cost)}</text>`}</g></g>`;
     }).join("");
-    const body = openModal("🏪 Chuỗi Cửa hàng nhỏ của Uyên", `<p class="sub">Doanh thu và chi phí của mọi quán được đồng bộ về một két chung. Kho nguyên liệu và máy móc dùng chung cả chuỗi.</p>
-      <h3>Các quán</h3><div class="grid">${shops}</div><h3>📈 Doanh thu chuỗi</h3>${chartSvg()}${next ? `<h3>Mở rộng</h3><div class="grid">${next}</div>` : ""}`, { panel: "chain" });
-    on(body, "[data-open]", "click", b => {
-      const l = b.dataset.open, L = LOCATIONS[l];
-      if (!confirm(`Mở quán tại ${L.city} với giá ${money(L.cost)}? Uyên sẽ chuyển sang đứng quầy ở quán mới.`)) return;
-      S.money -= L.cost;
-      S.shops.push(newShop(l, false));
-      const idx = S.shops.length - 1;
-      R.weatherBy[l] = rollWeather(l);
-      R.today.shops[idx] = { served: 0, perfect: 0, lost: 0, revenue: 0, tips: 0, open: true };
-      R.today.purchases += L.cost;
-      R.cands[idx] = {}; ROLE_ORDER.forEach(r => R.cands[idx][r] = [genCandidate(r), genCandidate(r), genCandidate(r)]);
-      S.active = idx;
-      toast(`🎊 Khai trương ${L.city}! Khách ruột mới đang chờ Uyên ở đây.`, "gold"); Sound.sfx("day");
-      checkAchv(); buildScene(); renderAll(); save(true); showPrepare();
-    });
+    const islands = (lon, lat, name) => { const [x, y] = P([lon, lat]); return `<g transform="translate(${x} ${y})">${[[0,0],[9,5],[-7,7],[4,-8],[13,-3]].map(([a, b]) => `<circle cx="${a}" cy="${b}" r="2.6" fill="#f4d58d" stroke="#c9a227"/>`).join("")}<text y="22" text-anchor="middle" class="island">${name}</text></g>`; };
+    const pq = P([103.97, 10.22]);
+    const map = `<svg class="vn-map" viewBox="0 0 540 620" xmlns="http://www.w3.org/2000/svg">
+      <defs><pattern id="sea" width="40" height="24" patternUnits="userSpaceOnUse"><rect width="40" height="24" fill="#bfe9ff"/><path d="M2,14 q8,-6 16,0 t16,0" stroke="#fff" stroke-width="2" fill="none" opacity=".7"/></pattern>
+        <linearGradient id="landg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#a7d878"/><stop offset=".55" stop-color="#cde98f"/><stop offset="1" stop-color="#ffe29a"/></linearGradient></defs>
+      <rect width="540" height="620" rx="20" fill="url(#sea)"/>
+      <polygon points="${land}" fill="#9cc66b" opacity=".45" transform="translate(4 6)"/>
+      <polygon points="${land}" fill="url(#landg)" stroke="#6a994e" stroke-width="3" stroke-linejoin="round"/>
+      <circle cx="${pq[0]}" cy="${pq[1]}" r="6" fill="#cde98f" stroke="#6a994e" stroke-width="2"/>
+      ${islands(111.6, 16.5, "Q.Đ. Hoàng Sa")}${islands(113.7, 10.0, "Q.Đ. Trường Sa")}
+      <g opacity=".7">${[[104.1, 22.0], [105.0, 21.9], [104.5, 21.3]].map(p => { const [x, y] = P(p); return `<path d="M${x - 12},${y + 8} l12,-18 l12,18z" fill="#6a994e"/><path d="M${x - 4},${y - 4} l4,-6 l4,6z" fill="#fff"/>`; }).join("")}</g>
+      <text x="410" y="410" class="sea-name">Biển Đông</text>
+      <g transform="translate(450 470)"><path d="M-22,0 h44 l-8,10 h-28z" fill="#e07a5f"/><path d="M0,0 v-26 l14,20z" fill="#fff"/></g>
+      <g transform="translate(470 60)"><circle r="20" fill="#ffd166"/><circle r="28" fill="#ffd166" opacity=".3"/></g>
+      ${pins}
+    </svg>`;
+    const s0 = sel && LOCATIONS[sel];
+    let side;
+    if (s0) {
+      const k = owned(sel), local = Object.keys(DRINKS).filter(id => DRINKS[id].only === sel).map(id => DRINKS[id].name).join(", ");
+      const regs = CHARACTERS.filter(c => c.loc === sel).map(c => c.name).join(", ");
+      if (k >= 0) {
+        const sh = S.shops[k], T = R.today && R.today.shops[k];
+        side = `<div class="card owned"><h3 style="margin:0">☕ ${s0.city} — ${s0.name}</h3><div class="sub">${s0.desc}</div>
+          <div><span class="stars">${stars(sh.rep)}</span> ${Math.ceil(sh.rep)} uy tín · Thuê ${money(s0.rent)}/ngày</div>
+          <div>Nhân viên: ${ROLE_ORDER.map(r => sh.staff[r] ? ROLES[r].icon : "▫️").join(" ")}</div>
+          <div class="sub">Hôm nay: ${T ? `${T.served} ly · ${money(T.revenue + T.tips)}` : "-"} · Tổng: ${sh.served} ly · Máy: ${Object.keys(sh.equip).length}/${Object.keys(EQUIPMENT).length}</div>
+          <div class="sub">🏙️ Món địa phương: ${local}</div>
+          <div style="margin-top:6px">${k === S.active ? '<span class="pill green">Uyên đang ở đây</span>' : sh.staff.barista ? '<span class="pill">☕ Tự vận hành</span>' : '<span class="pill red">Đóng khi Uyên vắng</span>'}</div></div>`;
+      } else {
+        const why = reason || (!canAfford(s0.cost) ? `Cần ${money(s0.cost)} (két còn ${money(S.money)}).` : R.phase !== "prepare" ? "Chỉ mở chi nhánh vào đầu ngày." : "");
+        side = `<div class="card"><h3 style="margin:0">📍 ${s0.city} — ${s0.name}</h3><div class="sub">${s0.desc}</div>
+          <div class="row" style="margin-top:6px"><span class="pill">💰 Giá mở: ${money(s0.cost)}</span><span class="pill">🏠 Thuê ${money(s0.rent)}/ngày</span><span class="pill">👥 Khách ×${s0.flow}</span></div>
+          <div class="sub" style="margin-top:4px">⭐ Đặc sản bán giá cao: ${DRINKS[s0.specialty].name}<br>🏙️ Món chỉ có ở đây: ${local}<br>💞 Khách ruột mới: ${regs}</div>
+          <div class="row" style="margin-top:10px"><button class="btn big teal" id="c-open" ${why ? "disabled" : ""}>🏗️ Mở chi nhánh</button></div>
+          ${why ? `<div class="pill red" style="margin-top:6px">${why}</div>` : ""}</div>`;
+      }
+    } else side = `<div class="card"><h4>👆 Chọn một thành phố trên bản đồ</h4><div class="sub">Điểm ☕ là quán đã mở, ✨ là nơi đủ điều kiện mở ngay, 📍 là nơi chưa đủ điều kiện.</div>
+      ${reason ? `<div class="pill red" style="margin-top:6px">${reason}</div>` : `<div class="pill green" style="margin-top:6px">Đủ điều kiện mở chi nhánh mới!</div>`}</div>`;
+    const body = openModal("🗺️ Chi nhánh Cửa hàng nhỏ của Uyên", `<div class="branch-wrap"><div>${map}</div><div class="branch-side">
+      <p class="sub" style="margin-top:0">Doanh thu và chi phí mọi chi nhánh về chung một két. Mỗi chi nhánh có kho nguyên liệu, máy móc và món địa phương riêng. Mỗi chi nhánh mới cách nhau ít nhất ${MIN_DAYS_BETWEEN_SHOPS} ngày, và các quán cũ phải có Pha chế.</p>
+      ${side}<h3>📈 Doanh thu các chi nhánh</h3>${chartSvg()}</div></div>`, { panel: "chain" });
+    on(body, ".pin", "click", g => { Sound.sfx("click"); PANELS.chain(g.dataset.city); });
+    const ob = $("#c-open"); if (ob) ob.onclick = () => confirmOpen(sel);
   },
   album() {
     const cards = CHARACTERS.map(ch => {
@@ -1599,10 +1866,20 @@ const PANELS = {
     $("#s-howto").onclick = () => openModal("📖 Cách chơi", TUTORIAL.map(t => `<p style="font-size:20px">${t}</p>`).join(""));
   },
 };
-function buy(k, n, silent) {
+// Danh sách món quán đang bán, kèm công thức từng bước
+function sellingHtml(sh = shop()) {
+  const L = LOCATIONS[sh.loc];
+  return `<div class="grid menu-grid">${Object.keys(DRINKS).filter(id => drinkAvail(id, sh)).map(id => {
+    const d = DRINKS[id], spec = L.specialty === id, power = sh === shop() && outageNow() && powerDrink(id);
+    return `<div class="card menu-card ${power ? "locked" : ""}"><div class="row"><div class="menu-cup">${Art.drinkIcon(id)}</div><div style="flex:1"><h4>${d.name}${d.secret ? " 🌟" : ""}${d.only ? " 🏙️" : ""}</h4>
+      <div class="sub"><b class="pos">${money(d.price * (spec ? 1.2 : 1))}</b> · ${d.hot ? "♨️ nóng" : "🧊 lạnh"}${spec ? ' · <span class="pill green">Đặc sản ' + L.city + "</span>" : ""}${power ? ' · <span class="pill red">⚡ Cúp điện</span>' : ""}</div></div></div>
+      <ol class="steps">${d.recipe.map(k => `<li>${INGREDIENTS[k].icon} ${INGREDIENTS[k].name}</li>`).join("")}</ol></div>`;
+  }).join("")}</div>`;
+}
+function buy(k, n, silent, sh = shop()) {
   const cost = ingPrice(k) * n;
-  if (S.money < cost) { if (!silent) toast("Không đủ tiền nhập hàng!", "bad"); return; }
-  S.money -= cost; S.inv[k] = (S.inv[k] || 0) + n; R.today.purchases += cost;
+  if (!canAfford(cost)) { if (!silent) toast("Không đủ tiền nhập hàng!", "bad"); return; }
+  S.money -= cost; sh.inv[k] = (sh.inv[k] || 0) + n; R.today.purchases += cost;
   if (!silent) { Sound.sfx("coin"); refreshPanel(); }
   renderIngredients(); renderHud(); renderDockDots();
 }
@@ -1729,11 +2006,16 @@ function bindUI() {
     Sound.sfx("click"); closeDialog();
     const p = b.dataset.panel;
     if (R.phase === "report") return;
+    khoTab = menuTab = staffTab = decorTab = S.active;
     PANELS[p]();
   }));
   $("#modal-close").onclick = () => { Sound.sfx("click"); closeModal(); if (R.phase === "prepare") showPrepare(); };
   $("#btn-serve").onclick = serve;
   $("#tv").addEventListener("click", openTv);
+  $("#menu-board").addEventListener("click", () => {
+    if (!S || !["open", "prepare"].includes(R.phase) || isPaused()) return;
+    Sound.sfx("click"); closeDialog(); PANELS.board();
+  });
   $("#btn-dump").onclick = () => { if (!R.cup.length || isPaused()) return; R.cup = []; Sound.sfx("pour"); renderBench(); };
   $("#btn-undo").onclick = () => { if (!R.cup.length || isPaused()) return; R.cup.pop(); Sound.sfx("click"); renderBench(); };
   $("#btn-clean").onclick = () => {
