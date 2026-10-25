@@ -224,3 +224,87 @@ const MUSIC_PRESETS = {
   ballad: { name: "Piano ballad", icon: "🎹", desc: "Thư thái, ít trống", tempo: 66, key: 8, style: "ballad" },
 };
 const YT_SUGGEST = ["vietnamese coffee jazz", "nhạc Trịnh jazz", "lofi hip hop radio", "bossa nova cafe", "jazz piano rainy day", "acoustic cà phê sáng"];
+
+// ===================== Cốt truyện theo chương =====================
+const CHAPTERS = [
+  { n: 1, icon: "🌿", title: "Mầm Nắng Đầu Tiên", sub: "Hương vị quen thuộc",
+    intro: ["Căn nhà cũ cuối phố, góc sân nhỏ phủ đầy lá khô. Uyên lau lại từng chiếc ghế gỗ, kê lại quầy pha chế của ngoại.",
+            "Những vị khách đầu tiên trong khu phố ghé qua: bác hàng xóm, cô sinh viên, anh họa sĩ tự do... Menu chỉ có vài món cà phê truyền thống và trà thảo mộc.",
+            "Uyên buộc lại tạp dề, hít một hơi thật sâu: “Bắt đầu thôi, Uyên ơi!”"],
+    goals: [
+      { text: "Phục vụ 40 ly", test: S => S.totals.served >= 40 },
+      { text: "Mua máy móc đầu tiên cho quán", test: S => S.shops.some(sh => Object.keys(sh.equip || {}).length > 0) },
+      { text: "Làm quen 3 khách ruột", test: S => Object.values(S.chars).filter(c => c.met).length >= 3 },
+    ] },
+  { n: 2, icon: "🌼", title: "Tiếng Tách Trà Chiều", sub: "Mở lòng & kết nối",
+    intro: ["Quán dần thành điểm hẹn thân thuộc. Mỗi vị khách mang theo một câu chuyện: sự mệt mỏi sau giờ làm, nỗi băn khoăn về tương lai, hay nỗi cô đơn giữa thành phố.",
+            "Có những người chẳng gọi món, chỉ nói: “Chị chọn giúp em một ly hợp tâm trạng nhé.”",
+            "Hãy lắng nghe. Pha đúng ly hợp lòng khách, họ sẽ trải lòng và để lại những mảnh ghép câu chuyện."],
+    goals: [
+      { text: "Pha 6 ly hợp tâm trạng khách", test: S => S.story.moodMatches >= 6 },
+      { text: "Khôi phục 5 trang sổ tay", test: S => Object.keys(S.story.pages).length >= 5 },
+      { text: "Một khách ruột đạt 3 tim", test: S => Object.values(S.chars).some(c => c.aff >= 60) },
+      { text: "Lắp 2 món trang trí ấm cúng", test: S => S.shops.reduce((a, sh) => a + Object.keys(sh.decor).length, 0) >= 2 },
+    ] },
+  { n: 3, icon: "🍁", title: "Thử Thách & Bão Rào Ban Đêm", sub: "Giữ vững bình yên",
+    intro: ["Đầu phố bỗng rực đèn: một chuỗi cà phê thương mại lớn khai trương, nhạc to, khuyến mãi rầm rộ. Khách quen thưa dần.",
+            "Uyên ngồi lặng bên quầy: “Mình có nên thay đổi để chạy theo họ, hay giữ nguyên quán nhỏ bình dị của ngoại?”"],
+    goals: [
+      { text: "Vượt qua đêm bão", test: S => !!S.story.stormDone },
+      { text: "Sáng tạo một món signature", test: S => (S.signatures || []).length >= 1 },
+      { text: "Mở sân vườn nhỏ hoặc góc đọc sách", test: S => S.shops.some(sh => sh.decor.san_vuon || sh.decor.goc_sach) },
+      { text: "Khôi phục 8 trang sổ tay", test: S => Object.keys(S.story.pages).length >= 8 },
+    ] },
+  { n: 4, icon: "🌸", title: "Hương Cà Phê Đơm Hoa", sub: "Góc trú ẩn bất tận",
+    intro: ["Cuốn sổ tay của ngoại gần như đã trọn vẹn. Chỉ còn trang cuối cùng, trắng tinh.",
+            "Ngoại để lại một dòng: “Trang này không phải của ngoại. Nó dành cho người sẽ tiếp tục giữ lửa.”"],
+    goals: [
+      { text: "Cùng Uyên viết trang cuối của sổ tay", test: S => !!S.story.lastPage },
+    ] },
+];
+
+// Tâm trạng khách và nhóm vị đồ uống hợp với tâm trạng đó
+const MOODS = {
+  met:      { name: "Mệt mỏi",   icon: "😮‍💨", feel: "dam",  ask: ["Hôm nay chạy deadline cả ngày, mệt rã rời...", "Tối qua mất ngủ, giờ mắt cứ díp lại."] },
+  buon:     { name: "Buồn",      icon: "🥺", feel: "am",   ask: ["Hôm nay có chuyện không vui... mình muốn cái gì đó ấm áp.", "Tự dưng thấy lòng nặng trĩu."] },
+  bankhoan: { name: "Băn khoăn", icon: "🤔", feel: "diu",  ask: ["Mình đang phân vân chuyện đổi việc, đầu óc rối bời.", "Nhiều chuyện phải nghĩ quá, cần chút tĩnh lặng."] },
+  codon:    { name: "Cô đơn",    icon: "🫥", feel: "am",   ask: ["Mới chuyển lên thành phố, chưa quen ai cả...", "Cuối tuần mà chẳng biết đi đâu."] },
+  nong:     { name: "Nóng nực",  icon: "🥵", feel: "mat",  ask: ["Trời nóng như đổ lửa, cần gì đó mát lạnh!", "Đạp xe nãy giờ, khát khô cổ rồi."] },
+  vui:      { name: "Vui vẻ",    icon: "🥳", feel: "ngot", ask: ["Mình vừa được tin vui! Muốn ăn mừng bằng gì đó ngọt ngào.", "Hôm nay là sinh nhật mình đó!"] },
+};
+const FEELS = { dam: "đậm, tỉnh táo", am: "ấm áp, vỗ về", diu: "dịu nhẹ, thư thái", mat: "mát lạnh, sảng khoái", ngot: "ngọt ngào" };
+const DRINK_FEEL = {
+  den_da: "dam", den_nong: "dam", sua_da: "dam", espresso: "dam", cf_cu_hoa: "dam", cf_com: "dam",
+  ca_cao_nong: "am", latte: "am", cappuccino: "am", ca_phe_trung: "am", jazz_latte: "am", sua_dau_nanh: "am",
+  tra_sen: "diu", tra_atiso: "diu", tra_dao: "diu", tra_vai: "diu", tra_cung_dinh: "diu", matcha_latte: "diu", tra_la_dua: "diu", nuoc_mot: "diu",
+  tra_chanh: "mat", tra_tac: "mat", nuoc_cam: "mat", nuoc_dua: "mat", rau_ma_dx: "mat", sinh_to_bo: "mat", sua_chua_cf: "mat", tra_dau: "mat",
+  bac_xiu: "ngot", tra_sua: "ngot", ca_phe_dua: "ngot", ca_phe_muoi: "ngot", sua_sen: "ngot", dua_dam: "ngot", ky_uc: "am",
+};
+
+// Sổ tay công thức cũ của ngoại: trang mờ cần mảnh ghép để khôi phục
+const NOTEBOOK = [
+  { title: "Cà phê phin của ngoại", need: 0, text: "Hai thìa cà phê, chút nước sôi để ủ, chờ ba mươi giây rồi mới chế tiếp. Vội là đắng, chậm là thơm." },
+  { title: "Bạc xỉu cho con bé", need: 0, text: "Nhiều sữa, ít cà phê. Ngày Uyên lên năm, con bé uống một ngụm rồi cười tít mắt. Ngoại đặt tên nó là “ly của Uyên”." },
+  { title: "Ca cao ngày mưa", need: 0, text: "Mưa là khách ngồi lâu. Pha ca cao thật đặc, để họ cầm ly cho ấm tay mà kể chuyện." },
+  { title: "Người khách áo mưa xanh", need: 2, text: "Ông ấy ngày nào cũng gọi đen nóng, không đường. Một hôm ông khóc. Ngoại không hỏi, chỉ thêm một chiếc bánh quy vào đĩa. Hôm sau ông lại tới và cười.", reward: { rep: 3 } },
+  { title: "Bí mật của ly hợp lòng", need: 3, text: "Người mệt cần đậm. Người buồn cần ấm. Người rối cần dịu. Người vui cần ngọt. Đừng hỏi họ muốn gì, hãy nghe họ đang thế nào.", reward: { moodTip: 0.05 } },
+  { title: "Góc sân và giàn hoa giấy", need: 4, text: "Ông ngoại trồng giàn hoa giấy năm ngoại mở quán. Ông bảo: quán nào cũng cần một góc để người ta ngồi im mà không thấy ngại.", reward: { money: 500000 } },
+  { title: "Những lá thư không gửi", need: 5, text: "Có cô sinh viên viết thư cho mẹ ở quê, viết xong lại gấp cất. Ngoại bảo cứ để lại quán, khi nào đủ can đảm thì gửi. Hộp thư ấy giờ vẫn ở dưới quầy.", reward: { flow: 0.03 } },
+  { title: "Khi quán vắng khách", need: 6, text: "Có năm quán vắng đến mức ngoại định đóng cửa. Rồi hàng xóm rủ nhau tới, mỗi người một ly. Quán nhỏ sống được là nhờ người ta thương nó.", reward: { rep: 5 } },
+  { title: "Ly nước cho người tìm lại ký ức", need: 8, text: "Cà phê phin cho ký ức đậm, sữa đặc cho những ngày ngọt, sữa tươi cho hiện tại dịu dàng, ca cao rắc lên cho chút hơi ấm. Ngoại chưa đặt tên, để dành cho ai đó...", reward: { money: 800000 } },
+  { title: "Trang cuối", need: -1, text: "" },
+];
+
+// Mùa trong năm (mỗi mùa 14 ngày)
+const SEASONS = [
+  { name: "Xuân", icon: "🌸", feel: "ngot", desc: "Đầu xuân, khách thích món ngọt ngào", event: "Phố treo đèn đón xuân, khách đi chơi đông hơn!" },
+  { name: "Hạ",   icon: "☀️", feel: "mat",  desc: "Mùa hè, món mát bán chạy", event: "Hè về, học sinh nghỉ học ghé quán đông vui!" },
+  { name: "Thu",  icon: "🍂", feel: "diu",  desc: "Thu dịu dàng, trà được ưa chuộng", event: "Gió heo may về, khách thích ngồi lâu nhâm nhi trà." },
+  { name: "Đông", icon: "❄️", feel: "am",   desc: "Đông lạnh, món ấm áp đắt hàng", event: "Gió mùa đông bắc tràn về, ai cũng tìm một ly ấm." },
+];
+
+// Phòng thử công thức signature: chấm điểm theo các nhóm nguyên liệu
+const SIG_BASE = ["phin", "espresso", "tra", "cacao", "matcha", "dau", "dua_tuoi", "rau_ma", "atiso", "dau_nanh", "sen", "bo", "cam"];
+const SIG_SWEET = ["sua_dac", "duong", "dua", "sua_chua", "vai", "dao"];
+const SIG_TOP = ["foam", "trung", "muoi", "tran_chau", "cacao"];
+const SIG_MAX = 3;

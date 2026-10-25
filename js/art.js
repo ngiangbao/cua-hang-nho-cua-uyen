@@ -232,7 +232,7 @@ const Art = (() => {
     return "";
   }
 
-  function sceneBg(locId, decor, extra = 0) {
+  function sceneBg(locId, decor, extra = 0, shelf = []) {
     const L = LOCATIONS[locId];
     const wall = L.wall, acc = L.accent;
     const plant = decor.cay_xanh ? `
@@ -260,12 +260,20 @@ const Art = (() => {
       <line x1="440" y1="70" x2="440" y2="250" stroke="#9c6644" stroke-width="6"/>
       <path d="M290,70 Q310,110 300,150 L290,150Z" fill="${acc}" opacity=".85"/><path d="M590,70 Q570,110 580,150 L590,150Z" fill="${acc}" opacity=".85"/>
       ${menu}${art}${ac}${speaker}
-      <g><rect x="40" y="120" width="160" height="10" rx="3" fill="#9c6644"/>${[0,1,2,3].map(i => `<rect x="${52 + i * 36}" y="${92 + (i % 2) * 6}" width="22" height="${28 - (i % 2) * 6}" rx="4" fill="${["#e07a5f","#81b29a","#f2cc8f","#3d405b"][i]}"/>`).join("")}</g>
-      <g class="lamp"><line x1="160" y1="-400" x2="160" y2="50" stroke="#333" stroke-width="2"/><path d="M140,50 h40 l10,22 h-60z" fill="#ffd166"/><ellipse cx="160" cy="74" rx="40" ry="8" fill="#fff3b0" opacity=".5"/></g>
+      ${shelfSvg(shelf)}
+      <g class="lamp"><line x1="250" y1="-400" x2="250" y2="50" stroke="#333" stroke-width="2"/><path d="M230,50 h40 l10,22 h-60z" fill="#ffd166"/><ellipse cx="250" cy="74" rx="40" ry="8" fill="#fff3b0" opacity=".5"/></g>
       <g class="lamp"><line x1="960" y1="-400" x2="960" y2="40" stroke="#333" stroke-width="2"/><path d="M940,40 h40 l10,22 h-60z" fill="#ffd166"/></g>
       ${plant}
       </g>
     </svg>`;
+  }
+
+  // Kệ tường: sách trang trí, hoặc kỷ vật khách ruột tặng (tối đa 2 tầng × 6 món)
+  function shelfSvg(items) {
+    const plank = y => `<rect x="40" y="${y}" width="170" height="10" rx="3" fill="#9c6644"/><rect x="48" y="${y + 10}" width="6" height="10" fill="#7f5539"/><rect x="196" y="${y + 10}" width="6" height="10" fill="#7f5539"/>`;
+    if (!items.length) return `<g>${plank(120)}${[0,1,2,3].map(i => `<rect x="${52 + i * 36}" y="${92 + (i % 2) * 6}" width="22" height="${28 - (i % 2) * 6}" rx="4" fill="${["#e07a5f","#81b29a","#f2cc8f","#3d405b"][i]}"/>`).join("")}</g>`;
+    const row = (arr, y) => arr.map((it, k) => `<text x="${58 + k * 28}" y="${y - 4}" font-size="24" text-anchor="middle" class="shelf-item"><title>${it.name}</title>${it.icon}</text>`).join("");
+    return `<g>${plank(120)}${row(items.slice(0, 6), 120)}${items.length > 6 ? plank(66) + row(items.slice(6, 12), 66) : ""}</g>`;
   }
 
   // Dây đèn và cờ trang trí cho phần tường cao hơn (màn hình iPad)

@@ -16,6 +16,8 @@ const hearts = aff => { const h = Math.floor(aff / 20); return "❤".repeat(h) +
 const stars = rep => { const n = Math.round(rep / 20 * 2) / 2; let s = ""; for (let i = 1; i <= 5; i++) s += `<i class="st ${n >= i ? "on" : n >= i - 0.5 ? "half" : "off"}">★</i>`; return s; };
 const WEEKDAYS = ["Thứ Hai", "Thứ Ba", "Thứ Tư", "Thứ Năm", "Thứ Sáu", "Thứ Bảy", "Chủ Nhật"];
 const weekday = d => WEEKDAYS[(d - 1) % 7];
+const seasonIdx = (d = S.day) => Math.floor((d - 1) / 14) % 4;
+const season = () => SEASONS[seasonIdx()];
 const clock = t => String(Math.floor(t / 60)).padStart(2, "0") + ":" + String(t % 60).padStart(2, "0");
 
 const DAY_START = 7 * 60, DAY_END = 21 * 60, MS_PER_MIN = 300;
@@ -46,13 +48,17 @@ function newShop(loc, first) {
   if (first) Object.assign(inv, { phin: 40, sua_dac: 30, duong: 40, chanh: 20, sa: 12, cacao: 12 });
   return { loc, inv, target: Object.assign({}, inv), equip: {}, rep: first ? 30 : 35, decor: {}, staff: { waiter: null, cleaner: null, cashier: null, barista: null }, served: 0, perfect: 0, opened: S ? S.day : 1 };
 }
+function newStory() {
+  return { chapter: 1, chapterShown: 0, fragments: 0, pages: { 0: 1, 1: 1, 2: 1 }, moodMatches: 0, moodTip: 0, notebook: false,
+    rival: null, stormDone: false, lastPage: null, seasonShown: 0 };
+}
 function newState() {
   const st = {
     v: 2, money: 2000000, day: 1, shops: [], active: 0, lastOpenDay: 1,
     secrets: {}, chars: {}, history: [], achv: {},
     totals: { served: 0, perfect: 0, earned: 0, chats: 0 },
     flowBonus: 0, marketing: [], settings: { music: 0.5, sfx: 0.6, hints: true, musicOn: true, musicPreset: "auto" },
-    items: { phin_ngoai: 1 }, setsDone: {}, tipLoc: {},
+    items: { phin_ngoai: 1 }, setsDone: {}, tipLoc: {}, signatures: [], story: newStory(),
     introDone: false, debtDays: 0, lastReport: null, repV2: true,
   };
   S = st; st.shops.push(newShop("hanoi", true));
@@ -94,6 +100,8 @@ function migrate(st) {
     delete merged.inv; delete merged.target; delete merged.equip;
   }
   (merged.shops || []).forEach(sh => { sh.inv = sh.inv || starterInv(sh.loc); sh.target = sh.target || starterInv(sh.loc); sh.equip = sh.equip || {}; });
+  merged.story = Object.assign(newStory(), st.story || {});
+  merged.signatures = st.signatures || [];
   if (!merged.repV2) { (merged.shops || []).forEach(sh => sh.rep = Math.min(100, sh.rep + 20)); merged.repV2 = true; }
   const oldTrait = { cham: "nhanh", duyen: "duyen", can: "taynghe", vui: "thanthien" };
   (merged.shops || []).forEach(sh => Object.values(sh.staff).forEach(x => { if (x && !x.perks) { x.perks = [oldTrait[x.trait] || "nhanh"]; x.flaws = []; delete x.trait; } }));
@@ -101,6 +109,7 @@ function migrate(st) {
 }
 function loadData(data) {
   S = migrate(data.state);
+  registerSignatures();
   applySettings();
   const run = data.run;
   if (run && run.phase === "open") {
@@ -130,7 +139,7 @@ function fit() {
   const st = $("#stage");
   st.style.height = H + "px";
   st.style.setProperty("--E", E + "px");
-  if (E !== R.E) { R.E = E; if (S) { $("#scene-bg").innerHTML = Art.sceneBg(shop().loc, shop().decor, E); renderStaff(); R.customers.forEach(c => { if (c.el) c.el.style.left = slotX(c.slot, maxSlots()) + "px"; }); } }
+  if (E !== R.E) { R.E = E; if (S) { $("#scene-bg").innerHTML = Art.sceneBg(shop().loc, shop().decor, E, shelfItems()); renderStaff(); R.customers.forEach(c => { if (c.el) c.el.style.left = slotX(c.slot, maxSlots()) + "px"; }); } }
   st.style.transform = `scale(${s})`;
   st.style.left = pl + (w - 1600 * s) / 2 + "px";
   st.style.top = pt + (h - H * s) / 2 + "px";
@@ -169,6 +178,7 @@ function drinkAvail(id, sh = shop()) {
   if (d.only && d.only !== sh.loc) return false;
   if (d.equip && !sh.equip[d.equip]) return false;
   if (d.secret && !S.secrets[id]) return false;
+  if (d.story && !(S.story && S.story.lastPage)) return false;
   return d.recipe.every(k => ingAvail(k, sh));
 }
 const outageNow = () => R.phase === "open" && (!!(R.powerCut && R.time < R.powerCut.until) || !!(R.event && R.event.outage && R.time >= R.event.outage[0] && R.time < R.event.outage[1]));
@@ -258,6 +268,8 @@ function genCands() {
 }
 function prepareDay() {
   R.phase = "prepare";
+  checkChapter();
+  R.seasonBoost = S.day > 1 && (S.day - 1) % 14 === 0 ? 1.15 : 1;
   R.weatherBy = {}; S.shops.forEach(sh => R.weatherBy[sh.loc] = rollWeather(sh.loc));
   R.event = S.day > 1 && rand() < 0.38 ? Object.assign({}, pick(EVENTS)) : null;
   R.today = newToday();
@@ -328,7 +340,8 @@ function lambda(i, t) {
   for (const m of S.marketing) if (m.scope === "all" || i === S.active) mk += m.boost;
   const d = sh.decor;
   const ac = d.may_lanh ? (R.weatherBy[sh.loc] === "nong" ? 1.25 : 1.1) : 1;
-  return 0.06 * (1 + shopEff(sh, "flow")) * curve * L.flow * (0.6 + sh.rep / 100 * 0.9) * W.flow * ((R.event && R.event.flow) || 1) * weekend * mk * (1 + S.flowBonus) * (d.bien_neon ? 1.15 : 1) * ac;
+  const rival = S.story.rival && !S.story.stormDone && i === 0 ? (S.story.rival.choice === "theo" ? 0.9 : 0.7) : 1;
+  return 0.06 * rival * (R.seasonBoost || 1) * (sh.decor.san_vuon ? 1.08 : 1) * (1 + shopEff(sh, "flow")) * curve * L.flow * (0.6 + sh.rep / 100 * 0.9) * W.flow * ((R.event && R.event.flow) || 1) * weekend * mk * (1 + S.flowBonus) * (d.bien_neon ? 1.15 : 1) * ac;
 }
 function maxSlots() { return Math.min(6, 3 + (shop().decor.ban_ghe || 0)); }
 
@@ -351,7 +364,7 @@ function tickMinute() {
       c.pat -= 1; c.wait++;
       if (c.pat <= 0) { leave(c, "angry"); continue; }
       const wt = present(sh, "waiter");
-      if (c.state === "order" && wt && c.wait >= Math.max(1, (4 - wt.skill * 0.6) * (1 - effOf(wt, "speed")))) takeOrder(c);
+      if (c.state === "order" && wt && !c.mood && c.wait >= Math.max(1, (4 - wt.skill * 0.6) * (1 - effOf(wt, "speed")))) takeOrder(c);
     }
   }
   syncPower();
@@ -396,7 +409,7 @@ function pickDrink(i, favs) {
   const menu = menuList(S.shops[i]); if (!menu.length) return "den_da";
   if (favs) { const f = favs.filter(x => menu.includes(x)); if (f.length && rand() < 0.65) return pick(f); }
   const sh = S.shops[i], W = WEATHER[R.weatherBy[sh.loc] || "nang"], spec = LOCATIONS[sh.loc].specialty;
-  const w = menu.map(id => { const d = DRINKS[id]; let x = d.hot ? W.hot : clamp(2 - W.hot * 0.6, 0.3, 2); if (id === spec) x *= 2.2; if (d.secret) x *= 0.6; return x; });
+  const w = menu.map(id => { const d = DRINKS[id]; let x = d.hot ? W.hot : clamp(2 - W.hot * 0.6, 0.3, 2); if (id === spec) x *= 2.2; if (DRINK_FEEL[id] === season().feel) x *= 1.5; if (d.sig) x *= 1.4; if (d.secret) x *= 0.6; return x; });
   let r = rand() * w.reduce((a, b) => a + b, 0);
   for (let k = 0; k < menu.length; k++) { r -= w[k]; if (r <= 0) return menu[k]; }
   return menu[0];
@@ -431,6 +444,7 @@ function spawnCustomer(critic) {
     if (!S.chars[ch.id]) S.chars[ch.id] = { aff: 0, met: false, chatIdx: 0, story: 0, visits: 0 };
     S.chars[ch.id].visits++;
     c = { reg: ch, name: ch.name, look: ch.look, drink: pickDrink(S.active, ch.fav), patF: ch.patience };
+    if (S.story.chapter >= 2 && rand() < 0.3) c.mood = pick(Object.keys(MOODS));
   } else {
     const look = randLook();
     const n = S.day >= 2 && rand() < 0.15 ? (rand() < 0.6 ? 2 : 3) : 1;
@@ -438,7 +452,8 @@ function spawnCustomer(critic) {
     c = { reg: null, name: genName(look), look, drink: items[0], items, patF: 0.8 + rand() * 0.5 };
   }
   c.items = c.items || [c.drink]; c.idx = 0;
-  const pf = c.patF * (present(sh, "waiter") ? 1.25 : 1) * (sh.decor.loa_jazz ? 1.15 : 1) * Math.max(0.5, 1 + shopEff(sh, "patience"));
+  if (!c.reg && !c.critic && c.items.length === 1 && S.story.chapter >= 2 && rand() < 0.22) c.mood = pick(Object.keys(MOODS));
+  const pf = c.patF * (sh.decor.san_vuon ? 1.12 : 1) * (present(sh, "waiter") ? 1.25 : 1) * (sh.decor.loa_jazz ? 1.15 : 1) * Math.max(0.5, 1 + shopEff(sh, "patience"));
   Object.assign(c, { uid: ++R.uid, slot: s, state: "walking", wait: 0, chatted: false, tipBonus: 0, maxOrder: Math.round(55 * pf), maxDrink: Math.round(110 * pf * (1 + 0.5 * (c.items.length - 1))) });
   c.pat = c.max = c.maxOrder;
   mountCustomer(c, c.critic ? "📝 " : c.reg ? "💖 " : "");
@@ -466,7 +481,7 @@ function renderBubble(c) {
   const col = pct > 50 ? "#52b788" : pct > 25 ? "#f4a261" : "#e63946";
   const pbar = `<div class="pbar"><div style="width:${pct}%;background:${col}"></div></div>`;
   if (c.state === "walking") b.innerHTML = `<span class="big">👋</span>`;
-  else if (c.state === "order") b.innerHTML = `<span class="big">${storyPending(c) ? "💖" : "💬"}${c.items && c.items.length > 1 ? `<small class="multi">×${c.items.length}</small>` : ""}</span>${pbar}`;
+  else if (c.state === "order") b.innerHTML = `<span class="big">${storyPending(c) ? "💖" : c.mood ? MOODS[c.mood].icon : "💬"}${c.items && c.items.length > 1 ? `<small class="multi">×${c.items.length}</small>` : ""}</span>${pbar}`;
   else if (c.state === "drink") b.innerHTML = `<span class="mini-cup">${Art.drinkIcon(c.drink)}</span>${DRINKS[c.drink].name}${c.items && c.items.length > 1 ? ` <b>(${c.idx + 1}/${c.items.length})</b>` : ""}${!c.chatted ? " 💬" : ""}${storyPending(c) ? " 💖" : ""}${pbar}`;
   else b.innerHTML = c.say || "";
 }
@@ -597,6 +612,7 @@ function showCustomerMenu(c, overrideText) {
   if (overrideText) text = overrideText;
   else if (c.state === "order") {
     const greet = c.critic ? "Chào cô chủ. Tôi muốn thưởng thức món ngon nhất của quán." : pick(c.reg ? c.reg.greet : GEN.greet);
+    if (c.mood) return moodMenu(c, greet);
     const n = c.items ? c.items.length : 1;
     text = greet + " " + (n > 1 ? `Cho mình ${n} ly luôn nhé: ${c.items.map(x => DRINKS[x].name).join(", ")}!` : pick(GEN.order).replace("{d}", d.name));
   } else text = pick(["Mình đang đợi ", "Không vội đâu, ", "Ly "]) + d.name + (rand() < 0.5 ? " nha!" : " của mình sắp xong chưa?");
@@ -616,10 +632,10 @@ function chat(c) {
   const choices = shuffle(topic.a).map(([label, delta, reply]) => ({ label, fn: () => {
     if (c.reg) {
       const cs = S.chars[c.reg.id], before = Math.floor(cs.aff / 20);
-      cs.aff = clamp(cs.aff + delta, 0, 100);
+      cs.aff = clamp(cs.aff + affMul(delta), 0, 100);
       const after = Math.floor(cs.aff / 20);
       if (after > before) { toast(`💖 ${c.reg.name} đã lên ${after} tim!`, "gold"); Sound.sfx("heart"); }
-    } else c.tipBonus += delta * 0.02;
+    } else c.tipBonus += delta * 0.02 * (shop().decor.goc_sach ? 1.3 : 1);
     if (delta > 0) c.pat = Math.min(c.max, c.pat + 25);
     const p = custPos(c);
     floater(p.x + 40, p.y, delta >= 5 ? "💖💖" : delta > 0 ? "💖" : delta < 0 ? "💔" : "😐", delta < 0 ? "#e63946" : "#ff4d6d");
@@ -634,6 +650,7 @@ function playStory(c, st) {
   const talk = { c, mood: "happy" };
   const finish = () => {
     cs.story++;
+    addFragments(1, "nghe " + ch.name + " tâm sự");
     applyReward(st.reward, ch.name);
     Sound.sfx("heart"); renderBubble(c);
     const gift = cs.story >= ch.story.length && Object.keys(ITEMS).find(k => ITEMS[k].from === ch.id);
@@ -644,7 +661,7 @@ function playStory(c, st) {
     if (!reps) return finish();
     openDialog(Art.UYEN, `Bảo Uyên <small>trả lời ${ch.name}</small>`, "Uyên nên nói gì đây?", shuffle(reps).map(([say, delta, resp]) => ({ label: "💬 " + say, fn: () => {
       const before = Math.floor(cs.aff / 20);
-      cs.aff = clamp(cs.aff + delta, 0, 100);
+      cs.aff = clamp(cs.aff + affMul(delta), 0, 100);
       if (Math.floor(cs.aff / 20) > before) { toast(`💖 ${ch.name} đã lên ${Math.floor(cs.aff / 20)} tim!`, "gold"); Sound.sfx("heart"); }
       const p = custPos(c); floater(p.x + 40, p.y, delta >= 5 ? "💖💖" : delta > 0 ? "💖" : "💔", delta < 0 ? "#e63946" : "#ff4d6d");
       openDialog(c.look, dlgName(c), resp, [{ label: "💖 Cảm ơn đã kể Uyên nghe", main: true, fn: finish }], { c, mood: delta > 0 ? "happy" : "sad" });
@@ -675,6 +692,186 @@ function offerSwap(c, t) {
     } })).concat([{ label: "⏳ Mình chờ có điện", fn: closeDialog }]), { c, mood: "neutral" });
 }
 
+// ---------- Cốt truyện: chương, sổ tay, tâm trạng ----------
+const affMul = d => d > 0 ? Math.round(d * (shop().decor.goc_sach ? 1.3 : 1) * (S.story.rival && !S.story.stormDone ? (S.story.rival.choice === "theo" ? 0.7 : 1.3) : 1)) : d;
+const priceMod = i => S.story.rival && !S.story.stormDone && i === 0 && S.story.rival.choice === "theo" ? 0.9 : 1;
+function addFragments(n, why) {
+  if (!S.story.notebook) return;
+  S.story.fragments += n;
+  toast(`🧩 +${n} mảnh ghép câu chuyện (${why})`, "gold");
+  renderDockDots(); renderChapterBar();
+}
+function chapterProgress(n = S.story.chapter) {
+  const C = CHAPTERS[n - 1];
+  return { C, done: C.goals.filter(g => g.test(S)).length, total: C.goals.length };
+}
+function checkChapter() {
+  const st = S.story;
+  if (st.chapter >= 4) return;
+  const { done, total } = chapterProgress();
+  if (done < total) return;
+  if (st.chapter === 2 && S.day < 10) return;
+  st.chapter++;
+  toast(`📖 Mở chương mới: ${CHAPTERS[st.chapter - 1].title}`, "gold");
+}
+function renderChapterBar() {
+  const bar = $("#chapter-bar"); if (!bar || !S) return;
+  const { C, done, total } = chapterProgress();
+  bar.innerHTML = S.story.lastPage ? `🌸 Cốt truyện đã trọn vẹn · <b>Sổ tay đã đầy</b>`
+    : `${C.icon} <b>Chương ${C.n}: ${C.title}</b><span class="cb-prog">${done}/${total}</span>${S.story.notebook ? `<span class="cb-frag">🧩 ${S.story.fragments}</span>` : ""}`;
+}
+function showChapterCard(n, starting) {
+  const { C } = chapterProgress(n);
+  const goals = C.goals.map(g => `<div class="goal ${g.test(S) ? "done" : ""}"><span>${g.test(S) ? "✅" : "⬜"} ${g.text}</span></div>`).join("");
+  openModal(`${C.icon} Chương ${C.n}: ${C.title}`, `<div class="intro-wrap"><div class="portrait">${Art.person(Art.UYEN, "happy")}</div><div class="intro-text" style="font-size:20px">
+    <div class="sub" style="font-size:16px">${C.sub}</div>${C.intro.map(t => `<p style="margin:8px 0">${t}</p>`).join("")}
+    <h3>Mục tiêu chương</h3>${goals}${C.n === 2 ? `<p class="sub">Từ chương này, khách có biểu tượng tâm trạng (😮‍💨 🥺 🤔 🫥 🥵 🥳) sẽ nhờ Uyên chọn món. Hãy lắng nghe và gợi ý ly hợp lòng họ.</p>` : ""}
+    <div class="row" style="margin-top:12px"><button class="btn big teal" id="ch-ok">${starting ? "🌱 Bắt đầu chương" : "Đóng"}</button></div></div></div>`, { noClose: true });
+  $("#ch-ok").onclick = () => { if (starting) S.story.chapterShown = n; save(true); R.phase === "prepare" ? showPrepare() : closeModal(); };
+}
+// Các cảnh truyện chen vào đầu ngày (theo thứ tự ưu tiên)
+function storyGate() {
+  const st = S.story;
+  if (st.chapterShown < st.chapter) { showChapterCard(st.chapter, true); return true; }
+  if (!st.notebook && S.day >= 2) { showNotebookFound(); return true; }
+  if (st.chapter >= 3 && !st.rival && !st.stormDone) { showRival(); return true; }
+  if (st.rival && !st.stormDone && S.day >= st.rival.since + 3) { showStorm(); return true; }
+  if (st.chapter >= 4 && !st.lastPage && !R.lastPageAsked) { R.lastPageAsked = true; PANELS.notebook(); return true; }
+  if (S.day > 1 && st.seasonShown !== S.day && (S.day - 1) % 14 === 0) { st.seasonShown = S.day; showSeason(); return true; }
+  return false;
+}
+function storyModal(title, look, lines, btn, done) {
+  let i = 0;
+  const step = () => {
+    if (i >= lines.length) return done();
+    const t = lines[i++];
+    openModal(title, `<div class="intro-wrap"><div class="portrait">${Art.person(look, "happy")}</div><div class="intro-text">${t}
+      <div style="margin-top:18px"><button class="btn big" id="sm-next">${i < lines.length ? "▶ Tiếp" : btn}</button></div></div></div>`, { noClose: true });
+    $("#sm-next").onclick = () => { Sound.sfx("click"); step(); };
+  };
+  step();
+}
+function showNotebookFound() {
+  storyModal("📖 Cuốn sổ dưới ngăn kéo", Art.UYEN, [
+    "Sáng nay lau quầy, Uyên kéo ngăn kéo cũ ra thì nghe “cộp” một tiếng. Có gì đó bị gài ở mặt dưới...",
+    "Một cuốn sổ bìa vải đã sờn. Nét chữ nghiêng nghiêng của ngoại: “Sổ tay công thức”.",
+    "Nhiều trang bị mờ vì ẩm, chỉ còn đọc được vài dòng. Ở một trang có ghi chú dở dang: “Ly nước dành cho người đang tìm lại ký ức...”",
+    "Uyên ôm cuốn sổ vào lòng: “Mình sẽ khôi phục từng trang. Mỗi câu chuyện của khách là một mảnh ghép.”",
+  ], "📖 Mở sổ tay", () => { S.story.notebook = true; S.story.fragments += 1; save(true); toast("📖 Tìm thấy Sổ tay công thức cũ! (+1 🧩)", "gold"); renderDockDots(); showPrepare(); });
+}
+function showRival() {
+  openModal("🍁 Chuỗi cà phê lớn mở gần quán", `<div class="intro-wrap"><div class="portrait">${Art.person(Art.UYEN, "sad")}</div><div class="intro-text" style="font-size:19px">
+    Đầu phố, chuỗi <b>MegaBrew</b> khai trương rầm rộ: đèn neon, nhạc to, mua một tặng một. Khách quen của quán ${LOCATIONS[S.shops[0].loc].city} thưa hẳn.
+    <p>Uyên phải chọn hướng đi cho quán nhỏ của ngoại:</p>
+    <div class="grid" style="grid-template-columns:1fr 1fr">
+      <div class="card"><h4>📉 Chạy theo xu hướng</h4><div class="sub">Giảm giá 10% ở quán ${LOCATIONS[S.shops[0].loc].city}, mất ít khách hơn (-10%), nhưng khách ruột thấy quán khác đi (thân thiết tăng chậm hơn 30%).</div><button class="btn" id="rv-theo" style="margin-top:8px">Chọn hướng này</button></div>
+      <div class="card"><h4>🌿 Giữ bản chất bình dị</h4><div class="sub">Giữ nguyên giá và không khí, chấp nhận vắng khách hơn (-30%), nhưng khách ruột càng gắn bó (thân thiết tăng nhanh hơn 30%).</div><button class="btn teal" id="rv-giu" style="margin-top:8px">Chọn hướng này</button></div>
+    </div><p class="sub">Ảnh hưởng kéo dài tới khi có biến cố mới...</p></div></div>`, { noClose: true });
+  const pickRival = choice => { S.story.rival = { choice, since: S.day }; save(true); toast(choice === "giu" ? "🌿 Uyên quyết giữ quán bình dị như ngày ngoại còn đứng quầy." : "📉 Uyên giảm giá để cạnh tranh với MegaBrew.", "gold"); showPrepare(); };
+  $("#rv-theo").onclick = () => pickRival("theo");
+  $("#rv-giu").onclick = () => pickRival("giu");
+}
+function showStorm() {
+  const friends = CHARACTERS.filter(c => S.chars[c.id] && S.chars[c.id].met && S.chars[c.id].aff >= 40);
+  const cost = Math.max(0, 1500000 - friends.length * 250000);
+  const pay = canAfford(cost) ? cost : 0;
+  const helpers = friends.slice(0, 8).map(c => `<div class="helper"><div class="avatar-sm">${Art.person(c.look, "happy")}</div><div class="sub">${c.name}</div></div>`).join("");
+  storyModal("⛈️ Đêm bão", Art.UYEN, [
+    "Đêm qua mưa bão trút xuống phố nhỏ. Gió giật tung tấm bạt, nước tràn vào sân, giàn hoa giấy đổ rạp, mái hiên thủng một mảng lớn.",
+    "Sáng sớm, Uyên đứng giữa quán ngổn ngang, tay run run cầm cuốn sổ của ngoại may mà còn khô.",
+    `Rồi tiếng gõ cửa vang lên. ${friends.length ? `Từng người một: <b>${friends.map(c => c.name).join(", ")}</b>... mang theo búa, đinh, xô chậu, cả bánh mì và cà phê nóng.<div class="helpers">${helpers}</div>` : "Chỉ có vài người hàng xóm tới phụ một tay. Uyên tự nhủ phải gắn bó với khách hơn nữa."}`,
+    `${friends.length ? `“Quán này từng giữ ấm cho tụi mình. Giờ tới lượt tụi mình giữ quán.”` : ""} Chi phí sửa chữa: <b>${money(cost)}</b>${pay < cost ? " — khách ruột góp tiền giúp phần còn thiếu" : ""}. Cả phố biết đến “Cửa hàng nhỏ của Uyên” như một phần của cộng đồng.`,
+  ], "🤝 Cảm ơn mọi người", () => {
+    S.money -= pay; if (R.today) R.today.eventCost += pay;
+    const sh0 = S.shops[0]; sh0.rep = clamp(sh0.rep + 10, 0, 100);
+    S.flowBonus += 0.03; S.story.stormDone = true; S.story.fragments += 3;
+    toast("🤝 Quán đã được sửa lại! +10 uy tín, +3% khách toàn chuỗi, +3 🧩. MegaBrew không còn làm khó quán nữa.", "gold");
+    checkAchv(); save(true); showPrepare();
+  });
+}
+function showSeason() {
+  const Z = season();
+  openModal(`${Z.icon} Mùa ${Z.name} đến rồi!`, `<div class="intro-text" style="font-size:20px">${Z.event}<p class="sub">${Z.desc}. Hôm nay khách đông hơn 15%.</p>
+    <button class="btn big teal" id="se-ok">Tuyệt!</button></div>`, { noClose: true });
+  $("#se-ok").onclick = () => showPrepare();
+}
+// Khách có tâm trạng: Uyên lắng nghe và gợi ý món
+function moodMenu(c, greet) {
+  const M = MOODS[c.mood];
+  openDialog(c.look, dlgName(c) + ` <span class="pill">${M.icon} ${M.name}</span>`, `${greet} ${pick(M.ask)} Chị chọn giúp mình một ly hợp tâm trạng nhé?`, [
+    { label: "🎧 Lắng nghe & gợi ý món", main: true, fn: () => moodPick(c) },
+    ...(storyPending(c) ? [{ label: "💖 Ngồi tâm sự", fn: () => playStory(c, storyPending(c)) }] : []),
+    { label: "🙂 Bạn cứ tự chọn nhé", fn: () => { c.mood = null; takeOrder(c); closeDialog(); renderBubble(c); } },
+    { label: "⏳ Đợi chút nhé", fn: closeDialog },
+  ], { c, mood: "sad" });
+}
+function moodPick(c) {
+  const M = MOODS[c.mood], menu = menuList();
+  const good = shuffle(menu.filter(id => DRINK_FEEL[id] === M.feel)).slice(0, 1);
+  const opts = shuffle(good.concat(shuffle(menu.filter(id => !good.includes(id))).slice(0, 4 - good.length)));
+  const hint = !!S.story.pages[4];
+  openDialog(Art.UYEN, `Bảo Uyên <small>gợi ý cho khách đang ${M.name.toLowerCase()}</small>`, hint ? `Theo sổ tay của ngoại: người ${M.name.toLowerCase()} cần vị ${FEELS[M.feel]}.` : "Ly nào hợp với tâm trạng này nhỉ?",
+    opts.map(id => ({ label: `☕ ${DRINKS[id].name}${hint ? ` · ${FEELS[DRINK_FEEL[id] || "dam"]}` : ""}`, fn: () => {
+      c.drink = id; c.items = [id]; c.moodMatch = DRINK_FEEL[id] === M.feel;
+      const p = custPos(c);
+      floater(p.x + 30, p.y, c.moodMatch ? "💡 Hợp tâm trạng!" : "🤔", c.moodMatch ? "#e07a5f" : "#8a7a72");
+      openDialog(c.look, dlgName(c), c.moodMatch ? "Đúng là thứ mình đang cần! Chị hiểu mình ghê." : "Ừm... cũng được, để mình thử xem.",
+        [{ label: `📝 Nhận order: ${DRINKS[id].name}`, main: true, fn: () => { takeOrder(c); closeDialog(); } }], { c, mood: c.moodMatch ? "happy" : "neutral" });
+      c.mood = null;
+    } })), { c, mood: "neutral" });
+}
+
+// Kỷ vật bày trên kệ tường: kỷ vật của thành phố này và kỷ vật chung
+function shelfItems() {
+  if (!S) return [];
+  const loc0 = shop().loc;
+  return Object.keys(ITEMS).filter(k => S.items[k] && (ITEMS[k].set === loc0 || ITEMS[k].set === "global")).map(k => ({ icon: ITEMS[k].icon, name: ITEMS[k].name })).slice(0, 12);
+}
+function writeLastPage() {
+  const body = openModal("✍️ Trang cuối của sổ tay", `<div class="intro-wrap"><div class="portrait">${Art.person(Art.UYEN, "happy")}</div><div class="intro-text" style="font-size:19px">
+    Uyên đặt cuốn sổ lên quầy, trang cuối còn trắng. Viết gì để người sau đọc cũng thấy ấm lòng nhỉ?
+    <textarea id="lp-text" class="txt" rows="4" style="width:100%;margin-top:10px">Gửi những vị khách đã ghé qua: cảm ơn vì đã mang câu chuyện của mình tới đây. Quán nhỏ này sẽ luôn có một ly ấm chờ bạn.</textarea>
+    <p class="sub">Uyên sẽ ghi thêm công thức “Ly nước dành cho người đang tìm lại ký ức” mà ngoại còn dang dở.</p>
+    <div class="row"><button class="btn big teal" id="lp-ok">✍️ Viết vào sổ</button><button class="btn big gray" id="lp-later">Để sau</button></div></div></div>`, { noClose: true });
+  $("#lp-later").onclick = () => R.phase === "prepare" ? showPrepare() : closeModal();
+  $("#lp-ok").onclick = () => {
+    const text = ($("#lp-text").value || "").trim().slice(0, 400) || "Cảm ơn vì đã ghé quán.";
+    S.story.lastPage = { text, day: S.day };
+    S.story.pages[NOTEBOOK.length - 1] = S.day;
+    checkAchv(); save(true); renderIngredients(); renderChapterBar();
+    storyModal("🌸 Hương Cà Phê Đơm Hoa", Art.UYEN, [
+      "Uyên viết dòng cuối cùng rồi khẽ gấp sổ lại. Cuốn sổ của ngoại giờ đã trọn vẹn, với trang cuối của chính Uyên.",
+      "Công thức ngoại để dang dở cuối cùng cũng có tên: <b>Ly Ký Ức</b> — cà phê phin, sữa đặc, sữa tươi, rắc ca cao. Từ hôm nay nó có trên thực đơn của mọi chi nhánh.",
+      "Quán không cần quá đông đúc hay phô trương. Nhưng mỗi sáng mở cửa, vẫn có người bước vào, gọi một ly quen và mỉm cười.",
+      "Mỗi ngày ở Cửa hàng nhỏ của Uyên là một hành trình chữa lành nhẹ nhàng, nơi tình yêu và niềm vui nhỏ bé được gửi gắm qua từng ly nước. 🌸",
+    ], "☕ Tiếp tục mở quán", () => { toast("🌸 Hoàn thành cốt truyện! Ly Ký Ức đã có trên thực đơn.", "gold"); R.phase === "prepare" ? showPrepare() : closeModal(); });
+  };
+}
+
+// ---------- Món signature ----------
+function registerSignatures() {
+  Object.keys(DRINKS).forEach(id => { if (DRINKS[id].sig) delete DRINKS[id]; });
+  (S.signatures || []).forEach(g => { DRINKS[g.id] = { name: g.name, price: g.price, recipe: g.recipe, hot: g.hot, sig: true }; DRINK_FEEL[g.id] = g.feel; });
+}
+function sigScore(rec) {
+  let sc = 0; const notes = [];
+  if (rec.some(k => SIG_BASE.includes(k))) { sc += 2; notes.push("có nền vị chính"); } else notes.push("thiếu nền vị chính (cà phê, trà, ca cao, trái cây...)");
+  if (rec.some(k => SIG_SWEET.includes(k))) { sc += 1; notes.push("có vị ngọt"); }
+  if (rec.some(k => SIG_TOP.includes(k)) && rec.length >= 3) { sc += 1; notes.push("có lớp phủ"); }
+  if (rec.some(k => INGREDIENTS[k].only)) { sc += 1; notes.push("mang dấu ấn địa phương"); }
+  if (["da", "nuoc_nong"].includes(rec[rec.length - 1])) { sc += 1; notes.push("đúng nhiệt độ"); }
+  if (new Set(rec).size < rec.length) { sc -= 1; notes.push("lặp nguyên liệu"); }
+  if (rec.length < 3) { sc -= 1; notes.push("hơi đơn giản"); }
+  return { sc: clamp(sc, 0, 6), notes };
+}
+function sigFeel(rec) {
+  if (rec.some(k => ["phin", "espresso"].includes(k)) && !rec.includes("sua_tuoi")) return "dam";
+  if (rec.some(k => ["tra", "matcha", "sen", "atiso"].includes(k)) && !rec.includes("sua_dac")) return "diu";
+  if (rec.some(k => ["cam", "dua_tuoi", "rau_ma", "dau", "chanh", "tac"].includes(k))) return "mat";
+  if (rec.includes("nuoc_nong") || rec.includes("cacao")) return "am";
+  return "ngot";
+}
+
 // ---------- Kỷ vật & sổ sưu tập ----------
 const setItems = set => Object.keys(ITEMS).filter(k => ITEMS[k].set === set);
 function giveItem(id, from) {
@@ -684,6 +881,8 @@ function giveItem(id, from) {
   toast(`📚 Kỷ vật mới: ${I.icon} ${I.name}${from ? " — từ " + from : ""}`, "gold");
   Sound.sfx("heart");
   checkSets(); renderDockDots();
+  if (["open", "prepare"].includes(R.phase)) $("#scene-bg").innerHTML = Art.sceneBg(shop().loc, shop().decor, R.E, shelfItems());
+  addFragments(2, "nhận kỷ vật");
 }
 function checkSouvenirs() {
   S.shops.forEach(sh => {
@@ -862,11 +1061,12 @@ function serve() {
 }
 function resolveServe(c, q, byStaff) {
   const sh = shop(), d = DRINKS[c.drink], L = loc(sh), T = R.today.shops[S.active];
-  const price = d.price * (L.specialty === c.drink ? 1.2 : 1);
+  const price = d.price * (L.specialty === c.drink ? 1.2 : 1) * priceMod(S.active);
   const payRate = { perfect: 1, good: 1, ok: 0.7, wrong: 0 }[q];
   let tipRate = { perfect: 0.15, good: 0.06, ok: 0, wrong: 0 }[q];
   if (q !== "wrong") {
     tipRate += (c.pat / c.max) * 0.08 + c.tipBonus + (sh.decor.cay_xanh ? 0.05 : 0) + (present(sh, "cashier") ? 0.1 : 0) + (sh.decor.may_lanh ? 0.05 : 0) + ((R.event && R.event.tip) || 0) + shopEff(sh, "tip") + (S.tipLoc[sh.loc] || 0);
+    if (c.moodMatch) tipRate += 0.1 + S.story.moodTip;
     tipRate *= c.reg ? c.reg.tip : 1;
     if (R.clean < 50) tipRate *= 0.5;
   }
@@ -888,6 +1088,11 @@ function resolveServe(c, q, byStaff) {
     else { dRep -= 4; toast("📝 Nhà phê bình có vẻ không hài lòng... -4 uy tín", "bad"); }
   }
   sh.rep = clamp(sh.rep + dRep, 0, 100);
+  if (c.moodMatch && (q === "perfect" || q === "good")) {
+    S.story.moodMatches++; addFragments(1, "pha đúng ly hợp tâm trạng");
+    if (c.reg) S.chars[c.reg.id].aff = clamp(S.chars[c.reg.id].aff + 3, 0, 100);
+    c.moodMatch = false;
+  }
   if (c.reg) {
     const cs = S.chars[c.reg.id], before = Math.floor(cs.aff / 20);
     cs.aff = clamp(cs.aff + ({ perfect: 4, good: 2, ok: -1, wrong: -4 }[q]) + (q === "perfect" && c.reg.fav.includes(c.drink) ? 2 : 0), 0, 100);
@@ -982,7 +1187,7 @@ function simTick(i) {
     if (!hasStock(d.recipe, sh)) { T.lost++; if (!R.today.shortage[i]) { R.today.shortage[i] = true; toast(`📦 Quán ${LOCATIONS[sh.loc].city} báo thiếu nguyên liệu cho ${d.name}!`, "bad"); } continue; }
     consumeBy(b, d.recipe, true, sh);
     const q = baristaQuality(b);
-    const price = d.price * (LOCATIONS[sh.loc].specialty === id ? 1.2 : 1);
+    const price = d.price * (LOCATIONS[sh.loc].specialty === id ? 1.2 : 1) * priceMod(i);
     let tipRate = { perfect: 0.15, good: 0.06, ok: 0 }[q] + (S.tipLoc[sh.loc] || 0) + (sh.decor.cay_xanh ? 0.05 : 0) + (present(sh, "cashier") ? 0.1 : 0) + shopEff(sh, "tip") + ((R.event && R.event.tip) || 0);
     if (!present(sh, "cleaner")) tipRate *= 0.6;
     const pay = Math.round(price * (q === "ok" ? 0.7 : 1) / 1000) * 1000, tip = Math.round(price * tipRate / 1000) * 1000;
@@ -1166,7 +1371,7 @@ function checkAchv() {
 function buildScene() {
   const sh = shop();
   document.documentElement.style.setProperty("--accent", loc(sh).accent);
-  $("#scene-bg").innerHTML = Art.sceneBg(sh.loc, sh.decor, R.E);
+  $("#scene-bg").innerHTML = Art.sceneBg(sh.loc, sh.decor, R.E, shelfItems());
   $("#counter").innerHTML = Art.counter(sh.loc);
   $("#customers").innerHTML = "";
   for (const c of R.customers) if (c.el) $("#customers").appendChild(c.el);
@@ -1179,7 +1384,8 @@ function renderAll() { renderHud(); renderTickets(); renderBench(); renderIngred
 function renderHud() {
   if (!S) return;
   const sh = shop(), W = WEATHER[R.weatherBy[sh.loc] || "nang"];
-  $("#hud-day").textContent = `📅 Ngày ${S.day} · ${weekday(S.day)}`;
+  $("#hud-day").textContent = `📅 Ngày ${S.day} · ${weekday(S.day)} · ${season().icon} ${season().name}`;
+  renderChapterBar();
   $("#hud-clock").textContent = "🕐 " + (R.phase === "open" ? clock(Math.min(R.time, 24 * 60 - 1)) : "--:--");
   $("#hud-weather").textContent = W.icon + " " + W.name;
   $("#hud-shop").textContent = "📍 " + loc(sh).city;
@@ -1265,6 +1471,7 @@ function renderDockDots() {
   const dot = (panel, on) => { const b = document.querySelector(`[data-panel="${panel}"]`); const d = b.querySelector(".dot"); if (on && !d) b.appendChild(el("i", "dot")); if (!on && d) d.remove(); };
   dot("staff", S.shops.some((sh, i) => ROLE_ORDER.some(r => !sh.staff[r] && !roleReq(i, r))));
   dot("chain", canExpand() === null);
+  dot("notebook", S.story.notebook && NOTEBOOK.some((pg, i) => !S.story.pages[i] && pg.need > 0 && S.story.fragments >= pg.need));
   dot("kho", Object.keys(INGREDIENTS).some(k => ingAvail(k) && !INGREDIENTS[k].free && (shop().inv[k] || 0) < 5));
 }
 // Đang tạm dừng: khóa mọi thao tác pha chế, phục vụ, nhận order
@@ -1314,7 +1521,7 @@ function showTitle() {
         ${isIOS && !isStandalone() ? `<div class="install-tip">📱 <b>Cài như ứng dụng:</b> bấm nút Chia sẻ <b>⬆︎</b> của Safari → <b>“Thêm vào MH chính”</b>. Lần sau mở icon ☕ trên màn hình là chơi toàn màn hình, offline vẫn được. <br><span class="sub">Lưu ý: iOS tách bộ nhớ của Safari và ứng dụng — nếu đã chơi trong Safari, hãy “Xuất file save” rồi “Nhập file save” trong ứng dụng.</span></div>` : ""}
       </div>
     </div>`, { noClose: true });
-  const begin = n => { slot = n; newState(); S.introDone = false; applySettings(); startMusic(); showIntro(); };
+  const begin = n => { slot = n; newState(); registerSignatures(); S.introDone = false; applySettings(); startMusic(); showIntro(); };
   const cont = $("#t-continue"); if (cont) cont.onclick = () => { slot = ls; startMusic(); loadData(data); };
   const nw = $("#t-new"); if (nw) nw.onclick = () => begin(1);
   on(body, "[data-load]", "click", b => { slot = +b.dataset.load; startMusic(); loadData(readSlot(slot)); });
@@ -1471,6 +1678,7 @@ function confirmOpen(l) {
 }
 function showPrepare() {
   R.phase = "prepare";
+  if (storyGate()) return;
   const W = WEATHER[R.weatherBy[shop().loc]];
   const shopsHtml = S.shops.map((sh, i) => {
     const L = LOCATIONS[sh.loc], w = WEATHER[R.weatherBy[sh.loc]];
@@ -1596,8 +1804,10 @@ const PANELS = {
       <h3>☕ Đang bán (${menuList(sh).length} món)</h3><p class="sub">Bấm nguyên liệu đúng thứ tự để được “Hoàn hảo”. Đúng nguyên liệu nhưng sai thứ tự chỉ được “Ngon”.</p>${sellingHtml(sh)}
       <h3>🛠️ Máy móc của quán ${city}</h3><p class="sub">Mỗi quán mua máy riêng.</p><div class="grid">${eq}</div>
       ${locked ? `<h3>🔒 Chưa mở khóa ở quán này</h3><div class="grid">${locked}</div>` : ""}
+      <div class="row" style="margin-top:12px"><button class="btn ${S.story.chapter >= 3 ? "teal" : "gray"}" id="m-lab">🧪 Phòng thử công thức signature${S.story.chapter >= 3 ? "" : " (Chương 3)"}</button></div>
       <h3>🏙️ Món địa phương ở thành phố khác</h3><p class="sub">Mở quán ở các thành phố này để bán thêm món: ${elsewhere}</p>`, { panel: "menu" });
     on(body, "[data-tab]", "click", b => { menuTab = +b.dataset.tab; refreshPanel(); });
+    $("#m-lab").onclick = () => PANELS.lab();
     on(body, "[data-eq]", "click", b => {
       const id = b.dataset.eq, E = EQUIPMENT[id];
       if (!canAfford(E.price)) return;
@@ -1646,6 +1856,7 @@ const PANELS = {
     const tabs = S.shops.map((s, k) => `<button class="${k === i ? "on" : ""}" data-tab="${k}">📍 ${LOCATIONS[s.loc].city}</button>`).join("");
     const items = Object.keys(DECOR).map(id => {
       const D = DECOR[id], lv = sh.decor[id] || 0, price = D.price * (lv + 1);
+      if (D.chapter && S.story.chapter < D.chapter) return `<div class="card locked"><h4>🔒 ${D.name}</h4><div class="sub">${D.desc}</div><div class="pill" style="margin-top:6px">Mở ở Chương ${D.chapter}</div></div>`;
       return `<div class="card ${lv >= D.max ? "owned" : ""}"><h4>${D.name} ${D.max > 1 ? `<span class="sub">cấp ${lv}/${D.max}</span>` : ""}</h4><div class="sub">${D.desc}</div>
         <div class="row" style="margin-top:6px">${lv >= D.max ? '<span class="pill green">✔ Đã lắp</span>' : `<button class="btn" data-dec="${id}" ${!canAfford(price) ? "disabled" : ""}>Mua ${money(price)}</button>`}</div></div>`;
     }).join("");
@@ -1752,6 +1963,60 @@ const PANELS = {
     openModal(`💞 Sổ tay khách ruột (${met}/${CHARACTERS.length})`, `<p class="sub">Trò chuyện và pha đúng món yêu thích để tăng tim. Đạt 1, 3, 5 tim sẽ mở khóa câu chuyện và quà (khách hiện 💖). Mở quán ở thành phố mới để gặp khách ruột mới!</p><div class="grid">${cards}</div>`, { panel: "album" });
   },
   report() { showReport(S.lastReport, false); },
+  notebook() {
+    const st = S.story;
+    if (!st.notebook) { openModal("📖 Sổ tay công thức", `<p style="font-size:20px">Uyên chưa tìm thấy cuốn sổ nào cả... Có lẽ nó nằm đâu đó trong quán. Hãy chơi tiếp sang ngày mới.</p>`, { panel: "notebook" }); return; }
+    const pages = NOTEBOOK.map((pg, i) => {
+      const open = !!st.pages[i];
+      if (pg.need === -1) {
+        if (st.lastPage) return `<div class="nb-page open last"><h4>✍️ Trang cuối — Bảo Uyên</h4><p class="nb-text">${st.lastPage.text.replace(/</g, "&lt;")}</p><p class="nb-text">☕ <b>Ly Ký Ức</b>: cà phê phin → sữa đặc → sữa tươi → ca cao.</p></div>`;
+        return `<div class="nb-page"><h4>✍️ Trang cuối</h4><p class="sub">Trang giấy còn trắng. ${st.chapter >= 4 ? "" : "Sẽ được viết ở Chương 4."}</p>${st.chapter >= 4 ? `<button class="btn teal" id="nb-write">✍️ Viết trang cuối</button>` : ""}</div>`;
+      }
+      if (open) return `<div class="nb-page open"><h4>${pg.title}</h4><p class="nb-text">${pg.text}</p></div>`;
+      return `<div class="nb-page blur"><h4>${pg.title}</h4><p class="nb-text blurred">${pg.text}</p>
+        <button class="btn ${st.fragments >= pg.need ? "teal" : "gray"}" data-restore="${i}" ${st.fragments >= pg.need ? "" : "disabled"}>🧩 Khôi phục (${pg.need} mảnh ghép)</button></div>`;
+    }).join("");
+    const body = openModal("📖 Sổ tay công thức của ngoại", `<div class="row"><span class="pill green">🧩 ${st.fragments} mảnh ghép câu chuyện</span><span class="pill">📄 ${Object.keys(st.pages).length}/${NOTEBOOK.length} trang</span>
+      <span class="sub">Nhận mảnh ghép khi pha đúng ly hợp tâm trạng khách, nghe khách ruột tâm sự, nhận kỷ vật.</span></div>
+      <div class="notebook">${pages}</div>`, { panel: "notebook" });
+    on(body, "[data-restore]", "click", b => {
+      const i = +b.dataset.restore, pg = NOTEBOOK[i];
+      if (st.fragments < pg.need) return;
+      st.fragments -= pg.need; st.pages[i] = S.day;
+      const rw = pg.reward || {};
+      if (rw.moodTip) { st.moodTip += rw.moodTip; toast("📖 Từ giờ ly hợp tâm trạng được tip thêm 5%, và Uyên biết khách cần vị gì!", "gold"); }
+      if (rw.money || rw.rep || rw.flow) applyReward(rw, "sổ tay của ngoại");
+      Sound.sfx("heart"); save(true); renderChapterBar(); refreshPanel();
+    });
+    const w = $("#nb-write"); if (w) w.onclick = writeLastPage;
+  },
+  lab() {
+    const sh = shop();
+    if (S.story.chapter < 3) { openModal("🧪 Phòng thử công thức", `<p style="font-size:20px">Phòng thử công thức mở ở Chương 3.</p>`, { panel: "lab" }); return; }
+    R.lab = R.lab || [];
+    const ings = Object.keys(INGREDIENTS).filter(k => ingAvail(k, sh)).map(k => `<button class="ing lab-ing" data-li="${k}"><div class="ic" style="background:${INGREDIENTS[k].color}">${INGREDIENTS[k].icon}</div><div class="nm">${INGREDIENTS[k].name}</div></button>`).join("");
+    const rec = R.lab, { sc, notes } = sigScore(rec), price = 35000 + sc * 6000;
+    const mine = (S.signatures || []).map(g => `<div class="card"><div class="row"><div style="width:52px;height:52px">${Art.cup(g.recipe, { hot: g.hot })}</div><div><h4>⭐ ${g.name}</h4><div class="sub">${money(g.price)} · ${g.recipe.map(k => INGREDIENTS[k].name).join(" → ")}</div></div></div></div>`).join("");
+    const body = openModal("🧪 Phòng thử công thức của Uyên", `<p class="sub">Chọn 3–5 nguyên liệu theo thứ tự để tạo món signature. Món ngon (có nền vị chính, vị ngọt, lớp phủ, dấu ấn địa phương, đúng nhiệt độ) sẽ bán được giá cao. Tối đa ${SIG_MAX} món, mỗi lần thử tốn 300.000đ. Món signature bán ở mọi chi nhánh có đủ nguyên liệu, khách rất thích gọi.</p>
+      ${mine ? `<h3>Món của Uyên</h3><div class="grid">${mine}</div>` : ""}
+      <div class="lab-row"><div class="lab-cup">${Art.cup(rec, { hot: rec.includes("nuoc_nong") })}</div><div style="flex:1">
+        <div>${rec.map(k => `<span class="chip">${INGREDIENTS[k].icon} ${INGREDIENTS[k].name}</span>`).join(" → ") || '<span class="sub">Chưa có nguyên liệu</span>'}</div>
+        <div style="margin-top:6px">${"⭐".repeat(sc)}${"☆".repeat(6 - sc)} · Giá bán dự kiến <b>${money(price)}</b></div><div class="sub">${notes.join(" · ")}</div>
+        <div class="row" style="margin-top:8px"><input id="lab-name" class="txt" maxlength="28" placeholder="Đặt tên món, ví dụ: Chiều Hà Nội"><button class="btn gray" id="lab-undo">↩️</button><button class="btn gray" id="lab-clear">🗑️</button>
+          <button class="btn teal" id="lab-save" ${rec.length >= 3 && rec.length <= 5 && (S.signatures || []).length < SIG_MAX && canAfford(300000) ? "" : "disabled"}>💾 Lưu món (300.000đ)</button></div></div></div>
+      <div class="lab-ings">${ings}</div>`, { panel: "lab" });
+    on(body, "[data-li]", "click", b => { if (R.lab.length < 5) { R.lab.push(b.dataset.li); Sound.sfx("pop"); } refreshPanel(); });
+    $("#lab-undo").onclick = () => { R.lab.pop(); refreshPanel(); };
+    $("#lab-clear").onclick = () => { R.lab = []; refreshPanel(); };
+    $("#lab-save").onclick = () => {
+      const name = ($("#lab-name").value || "").trim() || `Signature của Uyên ${(S.signatures || []).length + 1}`;
+      S.money -= 300000; if (R.today) R.today.purchases += 300000;
+      S.signatures.push({ id: "sig_" + Date.now().toString(36), name, recipe: R.lab.slice(), price, hot: R.lab.includes("nuoc_nong"), feel: sigFeel(R.lab) });
+      registerSignatures(); R.lab = [];
+      toast(`⭐ Món signature mới: ${name}!`, "gold"); Sound.sfx("perfect");
+      renderHud(); save(true); refreshPanel();
+    };
+  },
   music(lastQuery) {
     const cur = S.settings.musicPreset || "auto";
     const presets = Object.keys(MUSIC_PRESETS).map(id => {
@@ -2012,6 +2277,7 @@ function bindUI() {
   $("#modal-close").onclick = () => { Sound.sfx("click"); closeModal(); if (R.phase === "prepare") showPrepare(); };
   $("#btn-serve").onclick = serve;
   $("#tv").addEventListener("click", openTv);
+  $("#chapter-bar").addEventListener("click", () => { if (S && ["open", "prepare"].includes(R.phase) && !isPaused()) showChapterCard(S.story.chapter, false); });
   $("#menu-board").addEventListener("click", () => {
     if (!S || !["open", "prepare"].includes(R.phase) || isPaused()) return;
     Sound.sfx("click"); closeDialog(); PANELS.board();
@@ -2048,7 +2314,7 @@ function bindUI() {
 }
 
 // Hook kiểm thử: chỉ bật khi URL có ?debug
-if (location.search.includes("debug")) window.__dbg = { get S() { return S; }, R, Music, startQte, spawnCustomer, PANELS, giveItem,
+if (location.search.includes("debug")) window.__dbg = { get S() { return S; }, R, Music, prepareDay, showPrepare, checkChapter, startQte, spawnCustomer, PANELS, giveItem,
   clear() { R.customers.slice().forEach(c => removeCustomer(c)); closeDialog(); },
   spawnMulti(n) { for (let k = 0; k < 30; k++) { spawnCustomer(); const c = R.customers[R.customers.length - 1]; if (c && c.items.length >= n) return; if (c) removeCustomer(c); } },
   spawnReg(id) { const ch = CHARACTERS.find(c => c.id === id); const s0 = freeSlot(); if (s0 < 0) return; if (!S.chars[id]) S.chars[id] = { aff: 0, met: true, chatIdx: 0, story: 0, visits: 0 };

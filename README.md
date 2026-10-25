@@ -1,6 +1,17 @@
 # ☕ Cửa hàng nhỏ của Uyên
 
-Game kinh doanh quán cà phê chạy trực tiếp trên trình duyệt. Vào vai **Bảo Uyên**: ngoại về quê dưỡng già và nhượng lại cho Uyên căn quán nhỏ trong hẻm phố cổ Hà Nội, cùng cái phin nhôm cũ và mấy người khách ruột. Bắt đầu từ một quán nhỏ, Uyên pha chế, ngồi tâm sự với khách, thuê nhân viên rồi mở chuỗi quán khắp Việt Nam.
+Game mô phỏng quán cà phê ấm áp (cozy shop simulation) chạy trực tiếp trên trình duyệt, với chủ đề *“Nơi lưu giữ ký ức & chữa lành qua từng ly cà phê”*. Bạn vào vai **Bảo Uyên**: ngoại về quê dưỡng già và nhượng lại cho Uyên căn nhà cũ có góc sân nhỏ cuối phố, cùng cái phin nhôm cũ và mấy người khách ruột. Uyên biến nơi đây thành góc trú ẩn bình yên: pha chế, lắng nghe khách, khôi phục cuốn sổ công thức của ngoại, rồi mở chi nhánh khắp Việt Nam.
+
+## Cốt truyện 4 chương
+
+| Chương | Nội dung |
+|---|---|
+| 🌿 **1. Mầm Nắng Đầu Tiên** | Đón những vị khách đầu tiên trong khu phố. Đầu ngày 2, Uyên tìm thấy **cuốn sổ tay công thức cũ** của ngoại gài dưới ngăn kéo quầy, nhiều trang đã mờ. |
+| 🌼 **2. Tiếng Tách Trà Chiều** | Khách mang theo tâm trạng (mệt mỏi, buồn, băn khoăn, cô đơn, nóng nực, vui) và nhờ Uyên chọn món. Pha đúng ly hợp lòng khách sẽ nhận **🧩 mảnh ghép câu chuyện** để khôi phục các trang sổ. |
+| 🍁 **3. Thử Thách & Bão Rào Ban Đêm** | Chuỗi cà phê lớn MegaBrew mở gần quán: chọn chạy theo xu hướng hay giữ bản chất bình dị. Rồi một đêm bão làm hư quán, và những khách ruột thân thiết quay lại cùng sửa. Mở sân vườn nhỏ, góc đọc sách, và **phòng thử công thức** để sáng tạo món signature của riêng Uyên. |
+| 🌸 **4. Hương Cà Phê Đơm Hoa** | Uyên tự viết **trang cuối** của sổ tay, hoàn thiện công thức “Ly nước dành cho người đang tìm lại ký ức” — **Ly Ký Ức**. |
+
+Bốn mùa Xuân, Hạ, Thu, Đông luân phiên mỗi 14 ngày, mỗi mùa khách thích một kiểu đồ uống khác nhau. Kỷ vật khách ruột tặng được bày lên kệ tường của từng quán.
 
 **▶ Chơi ngay:** https://ngiangbao.github.io/cua-hang-nho-cua-uyen/
 
@@ -25,6 +36,10 @@ Game kinh doanh quán cà phê chạy trực tiếp trên trình duyệt. Vào v
 | ![Bản đồ](docs/screenshots/15-ban-do-chi-nhanh.png) | ![Nhân viên](docs/screenshots/16-nhan-vien-lam-viec.png) |
 | **Tuyển nhân viên: ưu điểm và nhược điểm ngẫu nhiên** | **Thực đơn riêng từng quán, có món địa phương** |
 | ![Tuyển dụng](docs/screenshots/17-tuyen-nhan-vien.png) | ![Thực đơn Sài Gòn](docs/screenshots/18-thuc-don-sai-gon.png) |
+| **Khách có tâm trạng nhờ Uyên chọn món** | **Sổ tay công thức cũ của ngoại** |
+| ![Tâm trạng](docs/screenshots/20-tam-trang.png) | ![Sổ tay](docs/screenshots/21-so-tay.png) |
+| **Chương 3: chuỗi cà phê lớn mở gần quán** | **Phòng thử công thức signature** |
+| ![Đối thủ](docs/screenshots/22-doi-thu.png) | ![Signature](docs/screenshots/23-signature.png) |
 | **Phá sản: chơi lại từ đầu** | |
 | ![Phá sản](docs/screenshots/19-pha-san.png) | |
 

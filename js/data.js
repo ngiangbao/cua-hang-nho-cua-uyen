@@ -75,6 +75,8 @@ const DRINKS = {
   dua_dam:      { name: "Dừa dầm",           price: 40000, recipe: ["dua_tuoi", "sua_dac", "da"], hot: false, only: "danang" },
   tra_cung_dinh:{ name: "Trà cung đình Huế", price: 45000, recipe: ["tra", "ky_tu", "sen", "nuoc_nong"], hot: true, only: "hue" },
   sua_sen:      { name: "Sữa sen Huế",       price: 40000, recipe: ["sen", "sua_tuoi", "duong", "da"], hot: false, only: "hue" },
+  // Món của cốt truyện — mở khi viết xong trang cuối sổ tay
+  ky_uc:        { name: "Ly Ký Ức",          price: 69000, recipe: ["phin", "sua_dac", "sua_tuoi", "cacao"], hot: false, story: true },
   // Công thức bí mật — mở khóa qua câu chuyện khách ruột
   jazz_latte:   { name: "Latte Jazz Đêm",    price: 65000, recipe: ["espresso", "sua_dac", "sua_tuoi", "foam", "cacao"], hot: true, equip: "may_espresso", secret: true },
   cf_cu_hoa:    { name: "Cà phê Cụ Hòa",     price: 60000, recipe: ["phin", "trung", "cacao"], hot: true, equip: "may_danh_trung", secret: true },
@@ -99,6 +101,8 @@ const DECOR = {
   bien_neon:{ name: "Biển hiệu đèn neon",  price: 700000,  max: 1, desc: "+15% lượng khách" },
   may_lanh: { name: "Máy lạnh",            price: 1500000, max: 1, desc: "+10% khách, +5% tip, ngày nóng hút khách. Điện +30.000đ/ngày" },
   tranh:    { name: "Tranh tường địa phương", price: 800000, max: 1, desc: "Uy tín tăng nhanh hơn 20%" },
+  san_vuon: { name: "Sân vườn nhỏ",        price: 1200000, max: 1, chapter: 3, desc: "Góc sân giàn hoa giấy: khách kiên nhẫn hơn 12%, +8% khách" },
+  goc_sach: { name: "Góc đọc sách",        price: 900000,  max: 1, chapter: 3, desc: "Khách ngồi lâu trò chuyện: điểm thân thiết tăng nhanh hơn 30%" },
 };
 
 // ---------- Địa điểm ----------
@@ -872,16 +876,19 @@ const ACHIEVEMENTS = [
   { id: "shop6",   name: "Từ Bắc vào Nam",     desc: "Có quán ở cả 6 thành phố",                 test: s => s.shops.length >= 6 },
   { id: "rich",    name: "Triệu phú phin",     desc: "Có 50.000.000đ trong két",                 test: s => s.money >= 50000000 },
   { id: "secret",  name: "Sổ tay bí mật",      desc: "Mở khóa 3 công thức bí mật",               test: s => Object.keys(s.secrets).length >= 3 },
+  { id: "story",   name: "Trang cuối của sổ tay", desc: "Hoàn thành cốt truyện 4 chương",       test: s => !!(s.story && s.story.lastPage) },
+  { id: "storm",   name: "Sau cơn bão",       desc: "Cùng khách ruột sửa quán sau đêm bão",     test: s => !!(s.story && s.story.stormDone) },
   { id: "rep5",    name: "Năm sao",            desc: "Một quán đạt uy tín 90",                   test: s => s.shops.some(sh => sh.rep >= 90) },
 ];
 
 const INTRO = [
   { who: "ngoai", text: "Uyên à, ngoại già rồi, tay không còn đủ vững để canh từng giọt phin nữa." },
   { who: "ngoai", text: "Ngoại quyết định về quê dưỡng già: sáng ra vườn tưới rau, chiều nghe đài, tối ngủ sớm." },
-  { who: "ngoai", text: "Căn quán nhỏ trong hẻm phố cổ, cái phin nhôm cũ và mấy người khách ruột... ngoại nhượng lại hết cho con." },
+  { who: "ngoai", text: "Căn nhà cũ có góc sân nhỏ cuối phố, cái phin nhôm cũ và mấy người khách ruột... ngoại nhượng lại hết cho con. Lâu rồi không ai chăm, chắc bụi bặm lắm." },
   { who: "ngoai", text: "Đừng lo nhiều về tiền. Cứ pha bằng cả tấm lòng, khách sẽ ở lại. Rảnh thì gọi điện kể chuyện quán cho ngoại nghe nhé." },
   { who: "ngoai", text: "Biết đâu một ngày, cửa hàng nhỏ của Uyên sẽ có mặt khắp đất nước này. Ngoại tin con." },
-  { who: "uyen",  text: "Ngoại cứ yên tâm nghỉ ngơi nhé. Con sẽ giữ lửa cho quán! Hôm nay, Cửa hàng nhỏ của Uyên chính thức mở cửa!" },
+  { who: "uyen",  text: "Mình sẽ biến nơi này thành một góc trú ẩn bình yên, cho mình và cho những ai ghé qua." },
+  { who: "uyen",  text: "Tự tay pha từng ly, trang trí từng góc, chăm từng chậu cây... Hôm nay, Cửa hàng nhỏ của Uyên chính thức mở cửa!" },
 ];
 
 const TUTORIAL = [
