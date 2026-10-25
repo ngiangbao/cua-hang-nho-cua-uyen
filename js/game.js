@@ -1591,7 +1591,6 @@ function renderBench(dripping) {
   $("#bench-cup").innerHTML = `<span class="lbl">Trong ly:</span>` + (R.cup.length ? R.cup.map(k => `<span class="chip">${INGREDIENTS[k].icon} ${INGREDIENTS[k].name}</span>`).join("") : `<span class="chip">trống</span>`);
   $("#btn-serve").disabled = !t || !R.cup.length || R.drip;
   $("#btn-dump").disabled = !R.cup.length || R.drip;
-  $("#btn-undo").disabled = !R.cup.length || R.drip;
 }
 function renderIngredients() {
   const box = $("#ingredients"); box.innerHTML = "";
@@ -1790,7 +1789,7 @@ function showReady() {
     <div class="intro-text">Tóm tắt nhanh:<br>
       1️⃣ Bấm vào khách 💬 để <b>nhận order</b>.<br>
       2️⃣ Chọn <b>phiếu order</b> ở quầy.<br>
-      3️⃣ Bấm <b>nguyên liệu đúng thứ tự</b> theo công thức (lỡ tay thì “↩️ Bỏ bước”).<br>
+      3️⃣ Bấm <b>nguyên liệu đúng thứ tự</b> theo công thức (lỡ tay thì “🗑️ Đổ bỏ” rồi pha lại).<br>
       4️⃣ Bấm <b>✅ Phục vụ</b> trước khi thanh kiên nhẫn của khách cạn.
       <div class="row" style="margin-top:20px"><button class="btn big teal" id="rd-yes">✅ Sẵn sàng! Bắt đầu ngày 1</button><button class="btn big gray" id="rd-no">🔁 Chưa, hướng dẫn lại</button></div>
     </div></div>`, { noClose: true });
@@ -2471,7 +2470,6 @@ function bindUI() {
     Sound.sfx("click"); closeDialog(); PANELS.board();
   });
   $("#btn-dump").onclick = () => { if (!R.cup.length || isPaused()) return; R.cup = []; Sound.sfx("pour"); renderBench(); };
-  $("#btn-undo").onclick = () => { if (!R.cup.length || isPaused()) return; R.cup.pop(); Sound.sfx("click"); renderBench(); };
   $("#btn-clean").onclick = () => {
     if (R.cleanCd || isPaused()) return;
     R.clean = clamp(R.clean + 40, 0, 100); R.cleanCd = true; $("#btn-clean").disabled = true; Sound.sfx("pop");
@@ -2487,11 +2485,10 @@ function bindUI() {
     if (S.settings.musicOn) Sound.start();
     applySettings();
   };
-  // Phím tắt: phím số 1-9 chọn nguyên liệu, Enter phục vụ, Backspace bỏ bước, Space tạm dừng
+  // Phím tắt: Enter phục vụ, Space tạm dừng
   addEventListener("keydown", e => {
     if (!S || R.phase !== "open" || !$("#modal").classList.contains("hidden")) return;
     if (e.key === "Enter") { e.preventDefault(); serve(); }
-    else if (e.key === "Backspace") { e.preventDefault(); $("#btn-undo").click(); }
     else if (e.key === " ") { e.preventDefault(); $("#btn-pause").click(); }
   });
   addEventListener("resize", fit);

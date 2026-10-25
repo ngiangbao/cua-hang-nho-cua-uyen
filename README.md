@@ -92,7 +92,7 @@ Bốn mùa Xuân, Hạ, Thu, Đông luân phiên mỗi 14 ngày, mỗi mùa khá
 3. Bấm **✅ Phục vụ** trước khi thanh kiên nhẫn của khách cạn.
 4. Nhập kho, thuê nhân viên, trang trí, rồi mở thêm quán.
 
-Phím tắt trên máy tính: `Enter` phục vụ, `Backspace` bỏ bước vừa thêm, `Space` tạm dừng.
+Phím tắt trên máy tính: `Enter` phục vụ, `Space` tạm dừng. Lỡ tay cho sai nguyên liệu thì bấm **🗑️ Đổ bỏ** để pha lại.
 
 ## Lưu tiến trình
 
