@@ -32,10 +32,11 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; }
 #rotate-hint .phone { font-size: 80px; animation: rot 1.6s ease-in-out infinite; }
 @keyframes rot { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
 /* Cầm máy dọc: game tự xoay 90° (xem fit()), không cần nhắc xoay máy nữa.
-   Mép trên thật của máy (Dynamic Island, vùng Safari làm mờ) phải chừa trọn; mép dưới chừa thanh Home. */
+   Mép trên thật của máy (Dynamic Island, vùng Safari làm mờ) phải chừa trọn; mép dưới chừa thanh Home.
+   --tb: chỗ cho thanh công cụ Safari (iOS 26 cho trang vẽ tràn xuống dưới nó mà không báo qua safe-area). */
 body.rotated #viewport { inset: auto; top: 0; left: 0; transform-origin: 0 0;
-  padding: 0 env(safe-area-inset-bottom) 0 env(safe-area-inset-top); }
-body.rotated.rot-left #viewport { padding: 0 env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
+  padding: 0 max(env(safe-area-inset-bottom), var(--tb, 0px)) 0 env(safe-area-inset-top); }
+body.rotated.rot-left #viewport { padding: 0 env(safe-area-inset-top) 0 max(env(safe-area-inset-bottom), var(--tb, 0px)); }
 
 /* ===== HUD ===== */
 #hud { position: absolute; left: 0; top: 0; width: 1600px; height: 64px; display: flex; align-items: center; gap: 10px;

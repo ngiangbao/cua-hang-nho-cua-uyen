@@ -142,6 +142,9 @@ function fit() {
   document.body.classList.toggle("rot-left", left);
   const vw = rotated ? innerHeight : innerWidth, vh = rotated ? innerWidth : innerHeight;
   vp.style.width = rotated ? vw + "px" : ""; vp.style.height = rotated ? vh + "px" : "";
+  // Safari (không phải bản cài vào MH chính) phủ trang kín màn hình thì thanh công cụ dưới đè lên ~60pt cuối
+  const underBar = rotated && isIOS && !isStandalone() && innerHeight >= screen.height - 4;
+  document.documentElement.style.setProperty("--tb", underBar ? "72px" : "0px");
   vp.style.transform = !rotated ? "" : left ? `translateY(${innerHeight}px) rotate(-90deg)` : `translateX(${innerWidth}px) rotate(90deg)`;
   const cs = getComputedStyle(vp);
   const pl = parseFloat(cs.paddingLeft) || 0, pr = parseFloat(cs.paddingRight) || 0, pt = parseFloat(cs.paddingTop) || 0, pb = parseFloat(cs.paddingBottom) || 0;
