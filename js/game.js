@@ -129,20 +129,35 @@ function loadData(data) {
 }
 
 // ---------- Co giãn khung ngang ----------
+const PHONE_STATION = 400, PHONE_DOCK = 96;
+const isPhone = () => document.body.classList.contains("phone");
 function fit() {
   const vp = $("#viewport"), cs = getComputedStyle(vp);
   const pl = parseFloat(cs.paddingLeft) || 0, pr = parseFloat(cs.paddingRight) || 0, pt = parseFloat(cs.paddingTop) || 0, pb = parseFloat(cs.paddingBottom) || 0;
   const w = innerWidth - pl - pr, h = innerHeight - pt - pb;
-  // Khung rộng 1600, cao từ 900 (16:9) tới 1200 (4:3) tùy màn hình — iPad dùng thêm chiều cao
-  const H = Math.round(clamp(1600 * h / w, 900, 1200));
-  const E = H - 900;
-  const s = Math.min(w / 1600, h / H);
+  // Điện thoại nằm ngang: khung thấp hơn (600) để chữ to, rộng theo tỷ lệ màn hình để phủ kín
+  const phone = Math.min(innerWidth, innerHeight) < 520 && innerWidth > innerHeight;
+  document.body.classList.toggle("phone", phone);
+  let W = 1600, H;
+  if (phone) { H = 600; W = Math.round(clamp(H * w / h, 1000, 1500)); }
+  // Máy tính/iPad: khung rộng 1600, cao từ 900 (16:9) tới 1200 (4:3) — iPad dùng thêm chiều cao
+  else H = Math.round(clamp(1600 * h / w, 900, 1200));
+  const E = phone ? 0 : H - 900;
+  const s = Math.min(w / W, h / H);
   const st = $("#stage");
-  st.style.height = H + "px";
+  st.style.width = W + "px"; st.style.height = H + "px";
   st.style.setProperty("--E", E + "px");
+  st.style.setProperty("--W", W + "px");
+  // Cảnh quán thu nhỏ vừa cột trái nhưng chừa ít nhất PHONE_DOCK cho hàng nút; quầy pha chế lấy phần còn lại
+  const sc = Math.min((W - PHONE_STATION) / 1010, (H - 56 - PHONE_DOCK) / 576);
+  st.style.setProperty("--sc", sc.toFixed(4));
+  st.style.setProperty("--stw", Math.round(W - 1010 * sc) + "px");
+  // Trên điện thoại, hộp thoại nằm ngoài cảnh quán (cảnh bị thu nhỏ) để chữ không bị nhỏ theo
+  const dlg = $("#dialog"), host = phone ? st : $("#scene");
+  if (dlg.parentElement !== host) host.appendChild(dlg);
   if (E !== R.E) { R.E = E; if (S) { $("#scene-bg").innerHTML = Art.sceneBg(shop().loc, shop().decor, E, shelfItems(), cityProg(shop())); renderStaff(); R.customers.forEach(c => { if (c.el) c.el.style.left = slotX(c.slot, maxSlots()) + "px"; }); } }
   st.style.transform = `scale(${s})`;
-  st.style.left = pl + (w - 1600 * s) / 2 + "px";
+  st.style.left = pl + (w - W * s) / 2 + "px";
   st.style.top = pt + (h - H * s) / 2 + "px";
 }
 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
@@ -1549,10 +1564,10 @@ function renderAll() { renderHud(); renderTickets(); renderBench(); renderIngred
 function renderHud() {
   if (!S) return;
   const sh = shop(), W = WEATHER[R.weatherBy[sh.loc] || "nang"];
-  $("#hud-day").textContent = `📅 Ngày ${S.day} · ${weekday(S.day)} · ${season().icon} ${season().name}`;
+  $("#hud-day").textContent = isPhone() ? `📅 Ngày ${S.day} ${season().icon}` : `📅 Ngày ${S.day} · ${weekday(S.day)} · ${season().icon} ${season().name}`;
   renderChapterBar();
   $("#hud-clock").textContent = "🕐 " + (R.phase === "open" ? clock(Math.min(R.time, 24 * 60 - 1)) : "--:--");
-  $("#hud-weather").textContent = W.icon + " " + W.name;
+  $("#hud-weather").textContent = isPhone() ? W.icon : W.icon + " " + W.name;
   $("#hud-shop").textContent = "📍 " + loc(sh).city;
   $("#hud-rep").innerHTML = `<span class="stars">${stars(sh.rep)}</span> ${Math.ceil(sh.rep)}`;
   $("#hud-rep").classList.toggle("danger", sh.rep < 10);
@@ -2156,6 +2171,10 @@ const PANELS = {
     openModal(`💞 Sổ tay khách ruột (${met}/${CHARACTERS.length})`, `<p class="sub">Trò chuyện và pha đúng món yêu thích để tăng tim. Đạt 1, 3, 5 tim sẽ mở khóa câu chuyện và quà (khách hiện 💖). Mở quán ở thành phố mới để gặp khách ruột mới!</p><div class="grid">${cards}</div>`, { panel: "album" });
   },
   report() { showReport(S.lastReport, false); },
+  // Trên điện thoại: mục tiêu hôm nay và tiến độ câu chuyện gom vào một bảng
+  goals() {
+    openModal("🎯 Mục tiêu hôm nay", `<div class="goals-m"><div class="chapter-m">${$("#chapter-bar").innerHTML}</div>${$("#goals").innerHTML}<div class="stats-m">${$("#today-stats").innerHTML}</div></div>`, { panel: "goals" });
+  },
   notebook() {
     const st = S.story;
     if (!st.notebook) { openModal("📖 Sổ tay công thức", `<p style="font-size:20px">Uyên chưa tìm thấy cuốn sổ nào cả... Có lẽ nó nằm đâu đó trong quán. Hãy chơi tiếp sang ngày mới.</p>`, { panel: "notebook" }); return; }
@@ -2601,7 +2620,7 @@ function devPanel() {
 }
 function bindDev() {
   let taps = [];
-  $("#brand-cup").addEventListener("pointerdown", () => {
+  $("#hud .brand").addEventListener("pointerdown", () => {
     if (!S || !["open", "prepare"].includes(R.phase)) return;
     const now = Date.now();
     taps = taps.filter(t => now - t < 3000); taps.push(now);
