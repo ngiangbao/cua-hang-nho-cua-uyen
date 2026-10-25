@@ -66,7 +66,7 @@ function newState() {
 }
 const shop = () => S.shops[S.active];
 // Két tiền về 0 hoặc âm là phá sản, nên mọi khoản chi phải chừa lại tiền
-const canAfford = cost => S.money - cost > 0;
+const canAfford = cost => !!(S && S.dev) || S.money - cost > 0;
 const loc = (sh = shop()) => LOCATIONS[sh.loc];
 
 // ---------- Lưu / tải ----------
@@ -357,6 +357,7 @@ function maxSlots() { return Math.min(6, 3 + (shop().decor.ban_ghe || 0)); }
 
 function tickMinute() {
   R.time++;
+  if (S.dev) devTick();
   const sh = shop();
   // Khách mới
   if (R.time < DAY_END) {
@@ -560,7 +561,7 @@ function leave(c, how) {
 // ---------- Phá sản ----------
 // Uy tín một quán về 0: khách mất niềm tin, chuỗi đóng cửa, phải chơi lại từ đầu
 function checkBankrupt() {
-  if (R.phase !== "open" || !S) return false;
+  if (R.phase !== "open" || !S || S.dev) return false;
   R.repWarn = R.repWarn || {};
   S.shops.forEach((sh, i) => {
     if (sh.rep < 10 && !R.repWarn[i]) { R.repWarn[i] = true; toast(`⚠️ Uy tín quán ${LOCATIONS[sh.loc].city} chỉ còn ${Math.ceil(sh.rep)}! Về 0 là phá sản.`, "bad"); Sound.sfx("alarm"); }
@@ -1520,6 +1521,7 @@ function endDay() {
   $("#customers").innerHTML = "";
   try { localStorage.setItem(SAVE_KEY(slot), JSON.stringify({ state: S, run: null, savedAt: Date.now() })); } catch (e) {}
   R.phase = "report";
+  if (S.dev) S.money = DEV_MONEY;
   if (S.money <= 0) { R.phase = "open"; gameOver("money"); return; }
   showReport(report, true);
 }
@@ -1554,7 +1556,8 @@ function renderHud() {
   $("#hud-shop").textContent = "📍 " + loc(sh).city;
   $("#hud-rep").innerHTML = `<span class="stars">${stars(sh.rep)}</span> ${Math.ceil(sh.rep)}`;
   $("#hud-rep").classList.toggle("danger", sh.rep < 10);
-  const m = $("#hud-money"); m.textContent = "💰 " + money(S.money); m.classList.toggle("neg", S.money < 0);
+  const m = $("#hud-money"); m.textContent = S.dev ? "💰 ∞" : "💰 " + money(S.money); m.classList.toggle("neg", S.money < 0 && !S.dev);
+  $("#btn-dev").classList.toggle("hidden", !S.dev);
   $("#clean-bar").style.width = R.clean + "%";
 }
 function renderTickets() {
@@ -2509,9 +2512,107 @@ if (location.search.includes("debug")) window.__dbg = { get S() { return S; }, R
     const c = { reg: ch, name: ch.name, look: ch.look, drink: pickDrink(S.active, ch.fav), patF: 2, items: null, idx: 0, uid: ++R.uid, slot: s0, state: "walking", wait: 0, chatted: false, tipBonus: 0, maxOrder: 200, maxDrink: 300 };
     c.items = [c.drink]; c.pat = c.max = 200; mountCustomer(c, "💖 "); } };
 
+// ---------- Chế độ nhà phát triển ----------
+// Mở bằng cách bấm 7 lần nhanh vào biểu tượng ☕ ở góc trái thanh trên cùng rồi nhập mã.
+// Chỉ lưu mã băm SHA-256 của mã, không lưu mã thật.
+const DEV_HASH = "ede93f7e08bad6f86bf1270d17fcc295a6d0e7f64cc5ce7a60c1819996b61819";
+const DEV_MONEY = 999999999;
+async function sha256(text) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+  return [...new Uint8Array(buf)].map(b => b.toString(16).padStart(2, "0")).join("");
+}
+function devTick() {
+  S.money = DEV_MONEY;
+  R.clean = 100;
+  if (S.devAuto === false) return;
+  // Nhân viên tự nhận mọi order và pha hoàn hảo, bất kể máy móc hay nguyên liệu
+  for (const c of R.customers.slice()) {
+    if (c.tut) continue;
+    if (c.state === "order") { c.mood = null; takeOrder(c); c.devT = 0; }
+    else if (c.state === "drink") {
+      c.pat = c.max;
+      if ((c.devT = (c.devT || 0) + 1) >= 2) {
+        c.devT = 0;
+        if (R.bJob && R.bJob.id === c.uid) R.bJob = null;
+        if (R.sel === c.uid) R.cup = [];
+        resolveServe(c, "perfect", true);
+      }
+    }
+  }
+}
+function devPrompt() {
+  if (document.querySelector(".dev-box")) return;
+  const box = el("div", "dev-box", `<input type="password" autocomplete="off" spellcheck="false">`);
+  $("#stage").appendChild(box);
+  const inp = box.querySelector("input"); inp.focus();
+  const close = () => box.remove();
+  inp.addEventListener("keydown", async e => {
+    e.stopPropagation();
+    if (e.key === "Escape") return close();
+    if (e.key !== "Enter") return;
+    const code = inp.value.trim().toUpperCase().replace(/\s+/g, "");
+    close();
+    try {
+      if (await sha256(code) !== DEV_HASH) return;
+    } catch (err) { return; }
+    S.dev = !S.dev; S.devAuto = S.devAuto !== false;
+    if (S.dev) { S.money = DEV_MONEY; toast("🛠️ Chế độ nhà phát triển: BẬT", "gold"); }
+    else { S.money = 2000000; toast("🛠️ Chế độ nhà phát triển: TẮT"); }
+    Sound.sfx("perfect"); renderHud(); save(true);
+  });
+  setTimeout(() => document.addEventListener("pointerdown", function off(ev) { if (!box.contains(ev.target)) { close(); document.removeEventListener("pointerdown", off); } }), 0);
+}
+function devPanel() {
+  const sh = shop();
+  const body = openModal("🛠️ Nhà phát triển", `<p class="sub">Toàn quyền trong trò chơi. Tiền luôn ∞, không bao giờ phá sản.</p>
+    <div class="grid dev-grid">
+      <button class="btn ${S.devAuto !== false ? "teal" : "gray"}" data-dev="auto">🤖 Nhân viên tự làm mọi món: ${S.devAuto !== false ? "BẬT" : "TẮT"}</button>
+      <button class="btn" data-dev="rep">⭐ Uy tín tối đa mọi quán</button>
+      <button class="btn" data-dev="machines">🛠️ Đủ máy móc + 99 nguyên liệu mọi quán</button>
+      <button class="btn" data-dev="staff">👥 Đủ nhân viên cứng tay 100% (quán này)</button>
+      <button class="btn" data-dev="time">⏩ +30 phút giờ chơi quán này (câu chuyện)</button>
+      <button class="btn" data-dev="branch">🗺️ Bỏ giới hạn 10 ngày mở chi nhánh</button>
+      <button class="btn" data-dev="hearts">💖 +1 tim mọi khách ruột đã gặp</button>
+      <button class="btn" data-dev="secrets">🔓 Mở mọi công thức bí mật</button>
+      <button class="btn" data-dev="frag">🧩 +10 mảnh ghép câu chuyện</button>
+      <button class="btn" data-dev="chapter">📖 Sang mốc truyện chính tiếp theo</button>
+      <button class="btn gray" data-dev="off">❌ Tắt chế độ nhà phát triển</button>
+    </div>`, { panel: "dev" });
+  on(body, "[data-dev]", "click", b => {
+    const k = b.dataset.dev;
+    if (k === "auto") S.devAuto = S.devAuto === false;
+    if (k === "rep") S.shops.forEach(x => x.rep = 100);
+    if (k === "machines") S.shops.forEach(x => { Object.keys(EQUIPMENT).forEach(e => x.equip[e] = true); Object.keys(INGREDIENTS).forEach(i => { if (!INGREDIENTS[i].free) x.inv[i] = Math.max(x.inv[i] || 0, 99); }); });
+    if (k === "staff") {
+      ROLE_ORDER.forEach(r => { if (!sh.staff[r]) sh.staff[r] = genCandidate(r); Object.assign(sh.staff[r], { hiredMin: -1e6, absent: false, skill: 5, flaws: [] }); });
+      if (playMin(sh.loc) >= SHOP_READY_MIN) sh.ready = true;
+    }
+    if (k === "time") { S.playMs[sh.loc] = (S.playMs[sh.loc] || 0) + 30 * 60000; }
+    if (k === "branch") S.lastOpenDay = -99;
+    if (k === "hearts") Object.values(S.chars).forEach(c => { if (c.met) c.aff = Math.min(100, c.aff + 20); });
+    if (k === "secrets") Object.keys(DRINKS).forEach(id => { if (DRINKS[id].secret) S.secrets[id] = true; });
+    if (k === "frag") { S.story.notebook = true; S.story.fragments += 10; }
+    if (k === "chapter" && S.story.chapter < 4) S.story.chapter++;
+    if (k === "off") { S.dev = false; S.money = 2000000; closeModal(); toast("🛠️ Chế độ nhà phát triển: TẮT"); }
+    toast("🛠️ Đã áp dụng", "gold"); Sound.sfx("click");
+    STF.sig = ""; buildScene(); renderAll(); save(true);
+    if (S.dev) refreshPanel();
+  });
+}
+function bindDev() {
+  let taps = [];
+  $("#brand-cup").addEventListener("pointerdown", () => {
+    if (!S || !["open", "prepare"].includes(R.phase)) return;
+    const now = Date.now();
+    taps = taps.filter(t => now - t < 3000); taps.push(now);
+    if (taps.length >= 7) { taps = []; devPrompt(); }
+  });
+  $("#btn-dev").addEventListener("click", () => { if (S && S.dev) { closeDialog(); devPanel(); } });
+}
+
 // ---------- Khởi động ----------
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(() => {});
-fit(); bindUI();
+fit(); bindUI(); bindDev();
 setTimeout(fit, 300); // iOS cập nhật kích thước muộn sau khi xoay màn hình
 addEventListener("orientationchange", () => setTimeout(fit, 300));
 S = newState();

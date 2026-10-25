@@ -417,3 +417,10 @@ input[type=range] { accent-color: var(--coral); width: 220px; }
 .lab-ings { display: grid; grid-template-columns: repeat(8, 1fr); gap: 8px; }
 .staff.uyen .tag { top: 64px; left: 112px; transform: none; }
 .shelf-item { filter: drop-shadow(0 2px 1px rgba(0,0,0,.25)); }
+
+/* ===== Ô nhập ẩn ===== */
+.dev-box { position: absolute; top: 70px; left: 16px; z-index: 40; }
+.dev-box input { width: 220px; font: inherit; font-size: 16px; padding: 6px 10px; border-radius: 10px; border: 2px solid rgba(255,255,255,.6); background: rgba(45,36,36,.85); color: #fff; outline: none; user-select: text; }
+.dev-grid { grid-template-columns: repeat(2, 1fr); }
+.dev-grid .btn { text-align: left; }
+#brand-cup { cursor: default; }
