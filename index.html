@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#e07a5f">
+  <!-- Chạy như ứng dụng khi "Thêm vào Màn hình chính" trên iPhone -->
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Quán của Uyên">
+  <meta name="format-detection" content="telephone=no">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="manifest" href="manifest.webmanifest">
+  <title>Cửa hàng nhỏ của Uyên</title>
+  <meta name="description" content="Game kinh doanh quán cà phê: pha chế, trò chuyện với khách và phát triển thành chuỗi khắp Việt Nam.">
+  <link rel="icon" type="image/png" href="icons/icon-192.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;700;800&display=swap&subset=vietnamese" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="rotate-hint">
+    <div class="phone">📱</div>
+    <p>Xoay ngang điện thoại để chơi nhé!</p>
+  </div>
+
+  <div id="viewport">
+    <div id="stage">
+      <!-- Thanh trạng thái -->
+      <header id="hud">
+        <div class="brand">☕ <span>Cửa hàng nhỏ của Uyên</span></div>
+        <div class="hud-item" id="hud-day" title="Ngày"></div>
+        <div class="hud-item" id="hud-clock" title="Giờ"></div>
+        <div class="hud-item" id="hud-weather" title="Thời tiết"></div>
+        <div class="hud-item" id="hud-shop" title="Quán đang đứng"></div>
+        <div class="hud-item" id="hud-rep" title="Uy tín quán"></div>
+        <div class="hud-item money" id="hud-money" title="Két tiền chuỗi"></div>
+        <div class="hud-ctrl">
+          <button id="btn-pause" title="Tạm dừng">⏸</button>
+          <button id="btn-speed" title="Tốc độ">1×</button>
+          <button id="btn-music" title="Nhạc">🎷</button>
+          <span id="save-dot" title="Đã lưu">💾</span>
+        </div>
+      </header>
+
+      <!-- Cảnh quán -->
+      <section id="scene">
+        <div id="scene-bg"></div>
+        <div id="staff-layer"></div>
+        <div id="counter"></div>
+        <div id="customers"></div>
+        <div id="floaters"></div>
+        <div id="coach" class="hidden"></div>
+        <div id="closed-sign" class="hidden">🔒 Đã đóng cửa</div>
+        <div id="dialog" class="hidden">
+          <div class="dlg-portrait" id="dlg-portrait"></div>
+          <div class="dlg-body">
+            <div class="dlg-name" id="dlg-name"></div>
+            <div class="dlg-text" id="dlg-text"></div>
+            <div class="dlg-choices" id="dlg-choices"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Bảng điều khiển phía dưới -->
+      <section id="dock">
+        <div id="dock-btns">
+          <button data-panel="kho"><span>📦</span>Kho</button>
+          <button data-panel="menu"><span>📜</span>Thực đơn</button>
+          <button data-panel="staff"><span>👥</span>Nhân viên</button>
+          <button data-panel="decor"><span>🪴</span>Trang trí</button>
+          <button data-panel="ads"><span>📣</span>Quảng cáo</button>
+          <button data-panel="chain"><span>🏪</span>Chuỗi quán</button>
+          <button data-panel="album"><span>💞</span>Khách quen</button>
+          <button data-panel="report"><span>📊</span>Sổ sách</button>
+          <button data-panel="achv"><span>🏆</span>Thành tựu</button>
+          <button data-panel="settings"><span>⚙️</span>Lưu & Cài đặt</button>
+        </div>
+        <div id="dock-info">
+          <div class="info-title">🎯 Mục tiêu hôm nay</div>
+          <div id="goals"></div>
+          <div id="today-stats"></div>
+        </div>
+      </section>
+
+      <!-- Quầy pha chế -->
+      <section id="station">
+        <div class="st-head">
+          <div class="st-title">🍹 Quầy pha chế của Uyên</div>
+          <div class="clean-wrap" title="Độ sạch sẽ">
+            <span>✨</span><div class="bar"><div id="clean-bar"></div></div>
+            <button id="btn-clean" title="Dọn dẹp">🧹 Dọn</button>
+          </div>
+        </div>
+        <div id="tickets"><div class="empty-tickets">Chưa có order nào. Bấm vào khách để nhận order!</div></div>
+        <div id="bench">
+          <div id="cup-wrap"></div>
+          <div id="bench-info">
+            <div id="bench-drink">Chọn một phiếu order</div>
+            <div id="bench-recipe"></div>
+            <div id="bench-cup"></div>
+            <div class="bench-btns">
+              <button id="btn-dump" class="ghost">🗑️ Đổ bỏ</button>
+              <button id="btn-undo" class="ghost">↩️ Bỏ bước</button>
+              <button id="btn-serve" class="primary">✅ Phục vụ</button>
+            </div>
+          </div>
+        </div>
+        <div id="ingredients"></div>
+      </section>
+
+      <!-- Bảng popup -->
+      <div id="modal" class="hidden">
+        <div class="modal-box">
+          <button class="modal-close" id="modal-close">✕</button>
+          <h2 id="modal-title"></h2>
+          <div id="modal-body"></div>
+        </div>
+      </div>
+      <div id="toasts"></div>
+    </div>
+  </div>
+
+  <script src="js/data.js"></script>
+  <script src="js/art.js"></script>
+  <script src="js/audio.js"></script>
+  <script src="js/game.js"></script>
+</body>
+</html>

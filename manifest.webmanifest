@@ -1,0 +1,16 @@
+{
+  "name": "Cửa hàng nhỏ của Uyên",
+  "short_name": "Quán của Uyên",
+  "description": "Game kinh doanh quán cà phê: pha chế, trò chuyện và mở chuỗi quán khắp Việt Nam.",
+  "lang": "vi",
+  "start_url": "./",
+  "scope": "./",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#2d2424",
+  "theme_color": "#e07a5f",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
