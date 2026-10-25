@@ -31,10 +31,11 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; }
   flex-direction: column; align-items: center; justify-content: center; text-align: center; font-size: 22px; font-weight: 700; }
 #rotate-hint .phone { font-size: 80px; animation: rot 1.6s ease-in-out infinite; }
 @keyframes rot { 0%, 30% { transform: rotate(0); } 60%, 100% { transform: rotate(-90deg); } }
-/* Cầm máy dọc: game tự xoay 90° (xem fit()), không cần nhắc xoay máy nữa */
+/* Cầm máy dọc: game tự xoay 90° (xem fit()), không cần nhắc xoay máy nữa.
+   Mép trên thật của máy (Dynamic Island, vùng Safari làm mờ) phải chừa trọn; mép dưới chừa thanh Home. */
 body.rotated #viewport { inset: auto; top: 0; left: 0; transform-origin: 0 0;
-  padding: 0 calc(env(safe-area-inset-bottom) * .4) 0 calc(env(safe-area-inset-top) * .6); }
-body.rotated.rot-left #viewport { padding: 0 calc(env(safe-area-inset-top) * .6) 0 calc(env(safe-area-inset-bottom) * .4); }
+  padding: 0 env(safe-area-inset-bottom) 0 env(safe-area-inset-top); }
+body.rotated.rot-left #viewport { padding: 0 env(safe-area-inset-top) 0 env(safe-area-inset-bottom); }
 
 /* ===== HUD ===== */
 #hud { position: absolute; left: 0; top: 0; width: 1600px; height: 64px; display: flex; align-items: center; gap: 10px;
@@ -436,6 +437,8 @@ input[type=range] { accent-color: var(--coral); width: 220px; }
 
 /* ===== Bố cục điện thoại nằm ngang ===== */
 body.phone #viewport { background: var(--cream); }
+/* Phần màn hình ngoài khung game (dưới thanh trạng thái, sau thanh công cụ Safari) cùng màu nền quán */
+html:has(body.phone), body.phone { background: var(--cream); }
 body.phone #stage { border-radius: 0; box-shadow: none; }
 body.phone #hud { width: var(--W); height: 56px; gap: 6px; padding: 0 8px; }
 body.phone .brand { font-size: 30px; padding: 4px 10px 4px 2px; margin-right: 0; }
