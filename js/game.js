@@ -46,7 +46,7 @@ function starterInv(locId) {
 function newShop(loc, first) {
   const inv = starterInv(loc);
   if (first) Object.assign(inv, { phin: 40, sua_dac: 30, duong: 40, chanh: 20, sa: 12, cacao: 12 });
-  return { loc, inv, target: Object.assign({}, inv), equip: {}, rep: first ? 30 : 35, decor: {}, staff: { waiter: null, cleaner: null, cashier: null, barista: null }, served: 0, perfect: 0, opened: S ? S.day : 1 };
+  return { loc, inv, target: Object.assign({}, inv), equip: {}, ready: false, rep: first ? 30 : 35, decor: {}, staff: { waiter: null, cleaner: null, cashier: null, barista: null }, served: 0, perfect: 0, opened: S ? S.day : 1 };
 }
 function newStory() {
   return { chapter: 1, chapterShown: 0, fragments: 0, pages: { 0: 1, 1: 1, 2: 1 }, moodMatches: 0, moodTip: 0, notebook: false,
@@ -99,7 +99,7 @@ function migrate(st) {
     });
     delete merged.inv; delete merged.target; delete merged.equip;
   }
-  (merged.shops || []).forEach(sh => { sh.inv = sh.inv || starterInv(sh.loc); sh.target = sh.target || starterInv(sh.loc); sh.equip = sh.equip || {}; });
+  (merged.shops || []).forEach(sh => { if (sh.ready === undefined) sh.ready = !!sh.staff.barista; sh.inv = sh.inv || starterInv(sh.loc); sh.target = sh.target || starterInv(sh.loc); sh.equip = sh.equip || {}; });
   merged.story = Object.assign(newStory(), st.story || {});
   merged.signatures = st.signatures || [];
   merged.cityStory = st.cityStory || {}; merged.shopPerk = st.shopPerk || {}; merged.playMs = st.playMs || {};
@@ -194,6 +194,14 @@ function ingPrice(k) {
 // Ưu/nhược điểm của nhân viên
 const staffTraits = st => [...(st.perks || []).map(k => PERKS[k]), ...(st.flaws || []).map(k => FLAWS[k])].filter(Boolean);
 const effOf = (st, key) => st ? staffTraits(st).reduce((a, t) => a + ((t.eff && t.eff[key]) || 0), 0) : 0;
+// Độ cứng tay: tăng theo số phút chơi thật ở quán kể từ khi thuê, đạt 100% sau STAFF_RAMP_MIN phút
+const STAFF_RAMP_MIN = 150, SHOP_READY_MIN = 240, HIRE_GAP_DAYS = 2;
+function prof(st, sh) {
+  if (!st) return 0;
+  if (st.hiredMin == null) return 1;
+  return clamp(0.15 + 0.85 * (playMin(sh.loc) - st.hiredMin) / STAFF_RAMP_MIN, 0.15, 1);
+}
+const pct = v => Math.round(v * 100) + "%";
 // Nhân viên có mặt hôm nay (không xin nghỉ)
 const present = (sh, role) => { const st = sh.staff[role]; return st && !st.absent ? st : null; };
 const shopEff = (sh, key) => ROLE_ORDER.reduce((a, r) => a + effOf(present(sh, r), key), 0);
@@ -249,7 +257,7 @@ function chainRevenueToday() { return Object.values(R.today.shops).reduce((a, s)
 // ---------- Chuẩn bị ngày mới ----------
 function newToday() {
   const shops = {};
-  S.shops.forEach((sh, i) => shops[i] = { served: 0, perfect: 0, lost: 0, revenue: 0, tips: 0, open: i === S.active || !!present(sh, "barista") });
+  S.shops.forEach((sh, i) => shops[i] = { served: 0, perfect: 0, lost: 0, revenue: 0, tips: 0, open: i === S.active || (!!sh.ready && !!present(sh, "barista")) });
   return { shops, served: 0, perfect: 0, chats: 0, drinks: {}, purchases: 0, marketing: 0, eventCost: 0, bonus: 0, lostActive: 0, shortage: {} };
 }
 function genCandidate(role) {
@@ -275,7 +283,7 @@ function prepareDay() {
   R.event = S.day > 1 && rand() < 0.38 ? Object.assign({}, pick(EVENTS)) : null;
   R.today = newToday();
   R.goals = makeGoals();
-  R.regularsToday = []; R.sim = {}; R.criticDone = false; R.clean = 100; R.expandAsked = false;
+  R.regularsToday = []; R.sim = {}; R.criticDone = false; R.clean = 100; R.expandAsked = false; R.pushDrink = null; R.waiterBusy = 0;
   R.customers = []; R.tickets = []; R.sel = null; R.cup = []; R.bJob = null; R.closingShown = false;
   clearSurprises();
   genCands();
@@ -295,11 +303,11 @@ function prepareDay() {
 }
 function autoRestock() {
   S.shops.forEach(sh => {
-    if (!present(sh, "cashier")) return;
+    const ca = present(sh, "cashier"); if (!ca || prof(ca, sh) < 0.3) return;
     let cost = 0, bought = 0;
     for (const k in sh.target) {
       if (!ingAvail(k, sh) || INGREDIENTS[k].free) continue;
-      const need = Math.max(0, (sh.target[k] || 0) - (sh.inv[k] || 0));
+      const need = Math.round(Math.max(0, (sh.target[k] || 0) - (sh.inv[k] || 0)) * prof(ca, sh));
       if (!need) continue;
       const c = need * ingPrice(k);
       if (!canAfford(c)) continue;
@@ -311,7 +319,7 @@ function autoRestock() {
 function openDay() {
   R.phase = "open"; R.time = DAY_START; R.acc = 0; R.paused = false;
   // Quán không có pha chế và Uyên không đứng -> đóng cửa
-  S.shops.forEach((sh, i) => R.today.shops[i].open = i === S.active || !!present(sh, "barista"));
+  S.shops.forEach((sh, i) => R.today.shops[i].open = i === S.active || (!!sh.ready && !!present(sh, "barista")));
   closeModal(); buildScene(); renderAll(); setPauseUI();
   Sound.setStyle(shop().loc);
   Sound.sfx("day");
@@ -360,13 +368,20 @@ function tickMinute() {
     toast("🌙 21:00 — Quán ngừng nhận khách mới. Phục vụ nốt khách đang chờ nhé!");
     R.customers.filter(c => c.state === "order").forEach(c => leave(c, "quiet"));
   }
+  if (R.waiterBusy > 0) R.waiterBusy--;
+  // Độ sạch: chưa có tạp vụ thì quán bẩn dần theo thời gian; tạp vụ dọn bù theo độ cứng tay
+  const cl = present(sh, "cleaner");
+  if (R.time < DAY_END) R.clean = clamp(R.clean - (R.customers.length ? 0.15 : 0.05) + (cl ? 1.0 * prof(cl, sh) : 0), 0, 100);
   // Kiên nhẫn
   for (const c of R.customers.slice()) {
     if (c.state === "order" || c.state === "drink") {
       c.pat -= 1; c.wait++;
       if (c.pat <= 0) { leave(c, "angry"); continue; }
       const wt = present(sh, "waiter");
-      if (c.state === "order" && wt && !c.mood && c.wait >= Math.max(1, (4 - wt.skill * 0.6) * (1 - effOf(wt, "speed")))) takeOrder(c);
+      if (c.state === "order" && wt && !c.mood && !(R.waiterBusy > 0) && c.wait >= Math.max(1, (4 - wt.skill * 0.6) * (1 - effOf(wt, "speed"))) / prof(wt, sh)) {
+        takeOrder(c);
+        R.waiterBusy = Math.round(6 * (1 - prof(wt, sh)));
+      }
     }
   }
   syncPower();
@@ -454,6 +469,11 @@ function spawnCustomer(critic) {
     c = { reg: null, name: genName(look), look, drink: items[0], items, patF: 0.8 + rand() * 0.5 };
   }
   c.items = c.items || [c.drink]; c.idx = 0;
+  const P = R.pushDrink;
+  if (P && P.left > 0 && !c.reg && !c.critic && R.time > DAY_START + 60 && rand() < 0.3) {
+    const want = P.drinks.filter(id => !drinkAvail(id));
+    if (want.length) { c.drink = pick(want); c.items = [c.drink]; c.mood = null; P.left--; }
+  }
   if (!c.reg && !c.critic && c.items.length === 1 && S.story.chapter >= 2 && rand() < 0.22) c.mood = pick(Object.keys(MOODS));
   const pf = c.patF * (sh.decor.san_vuon ? 1.12 : 1) * (present(sh, "waiter") ? 1.25 : 1) * (sh.decor.loa_jazz ? 1.15 : 1) * Math.max(0.5, 1 + shopEff(sh, "patience"));
   Object.assign(c, { uid: ++R.uid, slot: s, state: "walking", wait: 0, chatted: false, tipBonus: 0, maxOrder: Math.round(55 * pf), maxDrink: Math.round(110 * pf * (1 + 0.5 * (c.items.length - 1))) });
@@ -504,7 +524,7 @@ function takeOrder(c) {
   if (c.state !== "order") return;
   c.state = "drink"; c.pat = c.max = c.maxDrink;
   R.tickets.push({ id: c.uid, drink: c.drink });
-  if (R.sel == null) R.sel = c.uid;
+  if (R.sel == null && drinkAvail(c.drink)) R.sel = c.uid;
   renderBubble(c); renderTickets(); renderBench(); Sound.sfx("pop");
 }
 function removeCustomer(c) {
@@ -683,6 +703,19 @@ function giftScene(c, id) {
   openDialog(c.look, dlgName(c), `${ch.name} đặt vào tay Uyên một món đồ: ${I.icon} ${I.name}. “${I.desc}” Uyên giữ giúp nhé, coi như một phần đời của ${ch.name} ở lại quán.`,
     [{ label: "📚 Cất vào Sổ sưu tập", main: true, fn: () => showCustomerMenu(c, "Cảm ơn Uyên vì đã luôn lắng nghe.") }], { c, mood: "happy" });
 }
+function apologize(c, t) {
+  const d = DRINKS[t.drink], eq = d.equip;
+  openDialog(c.look, dlgName(c), `Ơ, quán chưa bán ${d.name} hả chị? Tiếc ghê...`, [
+    ...(eq && canAfford(EQUIPMENT[eq].price) ? [{ label: `🛠️ Mua ${EQUIPMENT[eq].name} ngay (${money(EQUIPMENT[eq].price)})`, main: true, fn: () => { buyMachine(eq, shop()); closeDialog(); renderTickets(); renderBench(); } }] : []),
+    { label: "🙇 Xin lỗi, quán chưa có món này", fn: () => {
+      const sh = shop(); sh.rep = clamp(sh.rep - 0.8, 0, 100);
+      R.today.shops[S.active].lost++; R.today.lostActive++;
+      const p = custPos(c); speech(p.x - 20, p.y - 10, "Thôi để lần sau vậy..."); floater(p.x + 20, p.y + 40, "-0.8 uy tín", "#e63946");
+      closeDialog(); c.state = "gone"; removeCustomer(c); checkBankrupt();
+    } },
+    { label: "⏳ Chờ chút", fn: closeDialog },
+  ], { c, mood: "sad" });
+}
 function offerSwap(c, t) {
   const alts = shuffle(menuList()).slice(0, 3);
   if (!alts.length) { toast("Không còn món nào pha được khi cúp điện!", "bad"); return; }
@@ -739,6 +772,8 @@ function storyGate() {
   if (st.chapter >= 3 && !st.rival && !st.stormDone) { showRival(); return true; }
   if (st.rival && !st.stormDone && S.day >= st.rival.since + 3) { showStorm(); return true; }
   if (st.chapter >= 4 && !st.lastPage && !R.lastPageAsked) { R.lastPageAsked = true; PANELS.notebook(); return true; }
+  if (!shop().ready && shopCanBeReady(shop())) { showShopReady(shop()); return true; }
+  if (machineReminder()) return true;
   if (cityActReady()) { showCityAct(); return true; }
   if (S.day > 1 && st.seasonShown !== S.day && (S.day - 1) % 14 === 0) { st.seasonShown = S.day; showSeason(); return true; }
   return false;
@@ -798,6 +833,40 @@ function showSeason() {
     <button class="btn big teal" id="se-ok">Tuyệt!</button></div>`, { noClose: true });
   $("#se-ok").onclick = () => showPrepare();
 }
+// ---------- Nhắc mua máy mới ----------
+// Vào các ngày cố định (tính từ ngày mở quán), nhắc mua máy tiếp theo. Từ chối thì hôm đó khách vẫn gọi món cần máy,
+// không pha được thì khách chờ hết kiên nhẫn rồi bỏ đi, quán mất uy tín.
+const MACHINE_DAYS = [2, 4, 7, 10, 13, 16];
+const MACHINE_ORDER = ["may_danh_trung", "tu_mat", "bo_cot_dua", "noi_tran_chau", "may_xay", "may_espresso"];
+const equipDrinks = (eq, sh) => Object.keys(DRINKS).filter(id => DRINKS[id].equip === eq && !DRINKS[id].secret && !DRINKS[id].sig && (!DRINKS[id].only || DRINKS[id].only === sh.loc));
+function buyMachine(eq, sh) {
+  const E = EQUIPMENT[eq];
+  if (!canAfford(E.price)) return false;
+  S.money -= E.price; if (R.today) R.today.purchases += E.price; sh.equip[eq] = true;
+  // Kèm 10 phần nguyên liệu dùng cho máy mới
+  for (const k in INGREDIENTS) if (INGREDIENTS[k].equip === eq) sh.inv[k] = (sh.inv[k] || 0) + 10;
+  toast(`🛠️ Quán ${LOCATIONS[sh.loc].city} đã có ${E.name} (kèm 10 phần nguyên liệu)!`, "gold"); Sound.sfx("coin");
+  renderIngredients(); renderHud(); save(true);
+  return true;
+}
+function machineReminder() {
+  const sh = shop(), days = S.day - (sh.opened || 1);
+  if (!MACHINE_DAYS.includes(days) || sh.machineAskDay === S.day) return false;
+  const eq = MACHINE_ORDER.find(e => !sh.equip[e]);
+  if (!eq) return false;
+  sh.machineAskDay = S.day;
+  const E = EQUIPMENT[eq], drinks = equipDrinks(eq, sh);
+  openModal(`🛠️ Khách hỏi món mới!`, `<div class="intro-wrap"><div class="portrait">${Art.person(Art.UYEN, "wow")}</div><div class="intro-text" style="font-size:19px">
+    Dạo này nhiều khách ở quán ${LOCATIONS[sh.loc].city} hỏi mua <b>${drinks.map(id => DRINKS[id].name).join(", ")}</b>. Muốn bán những món này, quán cần <b>${E.name}</b>.
+    <div class="row" style="margin:10px 0">${drinks.map(id => `<span class="pill">${DRINKS[id].name} · ${money(DRINKS[id].price)}</span>`).join("")}</div>
+    <p class="sub">Nếu chưa mua, hôm nay vẫn sẽ có khách gọi những món này. Không pha được thì khách sẽ chờ rồi bỏ đi, quán mất uy tín.</p>
+    <div class="row"><button class="btn big teal" id="mc-buy" ${canAfford(E.price) ? "" : "disabled"}>🛠️ Mua ngay ${money(E.price)}</button><button class="btn big gray" id="mc-no">Để sau</button></div>
+    ${canAfford(E.price) ? "" : `<p class="pill red">Két chưa đủ tiền mua máy.</p>`}</div></div>`, { noClose: true });
+  $("#mc-buy").onclick = () => { buyMachine(eq, sh); R.pushDrink = null; showPrepare(); };
+  $("#mc-no").onclick = () => { R.pushDrink = { drinks, left: 3 + Math.floor(rand() * 3) }; toast(`⚠️ Hôm nay sẽ có khách gọi ${drinks.map(id => DRINKS[id].name).join(", ")}...`, "bad"); showPrepare(); };
+  return true;
+}
+
 // ---------- Câu chuyện riêng của từng chi nhánh ----------
 const perkOf = (locId, key) => ((S.shopPerk || {})[locId] || {})[key] || 0;
 // Chuẩn hóa: câu chuyện dạng "acts" (Hà Nội) và dạng "scenes" (các chi nhánh khác)
@@ -1143,7 +1212,7 @@ function resolveServe(c, q, byStaff) {
   const payRate = { perfect: 1, good: 1, ok: 0.7, wrong: 0 }[q];
   let tipRate = { perfect: 0.15, good: 0.06, ok: 0, wrong: 0 }[q];
   if (q !== "wrong") {
-    tipRate += (c.pat / c.max) * 0.08 + c.tipBonus + (sh.decor.cay_xanh ? 0.05 : 0) + (present(sh, "cashier") ? 0.1 : 0) + (sh.decor.may_lanh ? 0.05 : 0) + ((R.event && R.event.tip) || 0) + shopEff(sh, "tip") + (S.tipLoc[sh.loc] || 0);
+    tipRate += (c.pat / c.max) * 0.08 + c.tipBonus + (sh.decor.cay_xanh ? 0.05 : 0) + 0.1 * prof(present(sh, "cashier"), sh) + (sh.decor.may_lanh ? 0.05 : 0) + ((R.event && R.event.tip) || 0) + shopEff(sh, "tip") + (S.tipLoc[sh.loc] || 0);
     if (c.moodMatch) tipRate += 0.1 + S.story.moodTip;
     tipRate += perkOf(sh.loc, "tip");
     tipRate *= c.reg ? c.reg.tip : 1;
@@ -1179,7 +1248,7 @@ function resolveServe(c, q, byStaff) {
     const after = Math.floor(cs.aff / 20);
     if (after > before) { toast(`💖 ${c.reg.name} đã lên ${after} tim!`, "gold"); Sound.sfx("heart"); }
   }
-  if (!present(sh, "cleaner")) R.clean = clamp(R.clean - 4, 0, 100);
+  R.clean = clamp(R.clean - 8 * (1 - 0.85 * prof(present(sh, "cleaner"), sh)), 0, 100);
   staffEvent("pay");
   // Còn ly khác trong cùng order
   if (q !== "wrong" && c.items && c.idx < c.items.length - 1) {
@@ -1216,9 +1285,9 @@ function resolveServe(c, q, byStaff) {
 }
 
 // ---------- Nhân viên ----------
-function baristaTime(b) { return Math.max(5, (20 - b.skill * 2.5) * (1 - effOf(b, "speed"))); }
-function baristaQuality(b) {
-  const r = rand(), pp = clamp(0.55 + b.skill * 0.08 + effOf(b, "quality"), 0.2, 0.98);
+function baristaTime(b, sh = shop()) { return Math.max(5, (20 - b.skill * 2.5) * (1 - effOf(b, "speed")) / (0.35 + 0.65 * prof(b, sh))); }
+function baristaQuality(b, sh = shop()) {
+  const r = rand(), pp = clamp(0.55 + b.skill * 0.08 + effOf(b, "quality") - (1 - prof(b, sh)) * 0.25, 0.2, 0.98);
   return r < pp ? "perfect" : r < pp + (1 - pp) * 0.75 ? "good" : "ok";
 }
 function hasStock(recipe, sh = shop()) {
@@ -1236,7 +1305,7 @@ function consumeBy(b, recipe, silent, sh = shop()) {
 function baristaTick() {
   const b = present(shop(), "barista"); if (!b) return;
   if (!R.bJob) {
-    const t = R.tickets.find(t => t.id !== R.sel && !t.barista && !(outageNow() && powerDrink(t.drink)));
+    const t = R.tickets.find(t => t.id !== R.sel && !t.barista && drinkAvail(t.drink) && !(outageNow() && powerDrink(t.drink)));
     if (t) {
       if (!hasStock(DRINKS[t.drink].recipe)) {
         if (!R.today.shortage.active) { R.today.shortage.active = true; toast(`☕ ${b.name}: "Chị ơi, hết nguyên liệu làm ${DRINKS[t.drink].name} rồi!"`, "bad"); }
@@ -1260,15 +1329,15 @@ function simTick(i) {
     sim.acc += lambda(i, R.time);
     while (sim.acc >= 1) { sim.acc--; if (sim.q < 3 + (sh.decor.ban_ghe || 0)) sim.q++; else T.lost++; }
   } else if (R.time > DAY_END + 30) { T.lost += sim.q; sim.q = 0; }
-  sim.bAcc = Math.min(1.5, sim.bAcc + 1 / baristaTime(b) * (present(sh, "waiter") ? 1.1 : 1));
+  sim.bAcc = Math.min(1.5, sim.bAcc + 1 / baristaTime(b, sh) * (present(sh, "waiter") ? 1.1 : 1));
   while (sim.bAcc >= 1 && sim.q > 0) {
     sim.bAcc--; sim.q--;
     const id = pickDrink(i), d = DRINKS[id];
     if (!hasStock(d.recipe, sh)) { T.lost++; if (!R.today.shortage[i]) { R.today.shortage[i] = true; toast(`📦 Quán ${LOCATIONS[sh.loc].city} báo thiếu nguyên liệu cho ${d.name}!`, "bad"); } continue; }
     consumeBy(b, d.recipe, true, sh);
-    const q = baristaQuality(b);
+    const q = baristaQuality(b, sh);
     const price = d.price * (LOCATIONS[sh.loc].specialty === id ? 1.2 : 1) * priceMod(i);
-    let tipRate = { perfect: 0.15, good: 0.06, ok: 0 }[q] + (S.tipLoc[sh.loc] || 0) + perkOf(sh.loc, "tip") + (sh.decor.cay_xanh ? 0.05 : 0) + (present(sh, "cashier") ? 0.1 : 0) + shopEff(sh, "tip") + ((R.event && R.event.tip) || 0);
+    let tipRate = { perfect: 0.15, good: 0.06, ok: 0 }[q] + (S.tipLoc[sh.loc] || 0) + perkOf(sh.loc, "tip") + (sh.decor.cay_xanh ? 0.05 : 0) + 0.1 * prof(present(sh, "cashier"), sh) + shopEff(sh, "tip") + ((R.event && R.event.tip) || 0);
     if (!present(sh, "cleaner")) tipRate *= 0.6;
     const pay = Math.round(price * (q === "ok" ? 0.7 : 1) / 1000) * 1000, tip = Math.round(price * tipRate / 1000) * 1000;
     S.money += pay + tip; S.totals.earned += pay + tip;
@@ -1280,6 +1349,8 @@ function simTick(i) {
 function roleReq(i, role) {
   const sh = S.shops[i], k = ROLE_ORDER.indexOf(role);
   if (k > 0 && !sh.staff[ROLE_ORDER[k - 1]]) return `Cần thuê ${ROLES[ROLE_ORDER[k - 1]].name} trước`;
+  const gap = (sh.lastHireDay || -99) + HIRE_GAP_DAYS - S.day;
+  if (k > 0 && gap > 0) return `🔒 Mở khóa sau ${gap} ngày (mỗi vị trí mới cách nhau ${HIRE_GAP_DAYS} ngày)`;
   const need = { waiter: 32, cleaner: 42, cashier: 52, barista: 65 }[role] - (i === 0 ? 0 : 10);
   if (sh.rep < need) return `Uy tín quán cần đạt ${need} (hiện ${Math.floor(sh.rep)})`;
   if (i === 0 && role === "waiter" && S.day < 2) return "Mở khóa từ ngày thứ 2";
@@ -1287,10 +1358,12 @@ function roleReq(i, role) {
 }
 function hire(i, role, idx) {
   const cand = R.cands[i][role][idx];
+  cand.hiredMin = playMin(S.shops[i].loc);
   S.shops[i].staff[role] = cand;
+  S.shops[i].lastHireDay = S.day;
   R.cands[i][role].splice(idx, 1);
   toast(`🎉 ${cand.name} bắt đầu làm ${ROLES[role].name} tại ${LOCATIONS[S.shops[i].loc].city}!`, "gold");
-  if (role === "barista") toast("☕ Quán đã có pha chế! Giờ Uyên có thể mở chi nhánh mới trong mục Chi nhánh.", "gold");
+  toast(`🌱 ${cand.name} còn mới, cần thời gian cứng tay. Uyên vẫn phải phụ một tay những ngày đầu.`);
   Sound.sfx("bell");
   checkAchv(); renderStaff(); renderDockDots(); save(true);
 }
@@ -1328,7 +1401,14 @@ function renderStaff() {
     if (k) make("cleaner", k.look, "🧹 " + short(k), 200, true, BROOM);
   }
   const u = STF.list.uyen; if (u) setIcon(u, R.drip ? "☕" : "");
-  $("#btn-clean").classList.toggle("hidden", !!present(sh, "cleaner"));
+  // Bảng tên hiện độ cứng tay khi nhân viên còn mới
+  const icons = { barista: "☕", cashier: "💁", waiter: "🧑‍🍳", cleaner: "🧹" };
+  for (const r of ROLE_ORDER) {
+    const o = STF.list[r], st = present(sh, r); if (!o || !st) continue;
+    const p = prof(st, sh), txt = `${icons[r]} ${st.name.split(" ").pop()}${p < 1 ? " " + pct(p) : ""}`;
+    const tag = o.el.querySelector(".tag"); if (tag.textContent !== txt) tag.textContent = txt;
+  }
+  $("#btn-clean").classList.toggle("hidden", prof(present(sh, "cleaner"), sh) >= 1);
 }
 function setIcon(o, icon) {
   const w = o.el.querySelector(".work");
@@ -1483,12 +1563,14 @@ function renderTickets() {
     const d = el("div", "ticket" + (t.id === R.sel ? " sel" : "") + (t.barista ? " barista" : ""));
     d.dataset.id = t.id;
     const noPower = outageNow() && powerDrink(t.drink);
+    const noMachine = !drinkAvail(t.drink) && !noPower;
     const multi = c.items && c.items.length > 1 ? `<span class="t-multi">Ly ${c.idx + 1}/${c.items.length}</span>` : "";
     d.innerHTML = `${noPower ? '<span class="t-badge">⚡</span>' : t.barista ? '<span class="t-badge">☕</span>' : c.reg ? '<span class="t-badge">💖</span>' : c.critic ? '<span class="t-badge">📝</span>' : ""}${multi}
       <div class="t-cup">${Art.drinkIcon(t.drink)}</div><div class="t-name">${DRINKS[t.drink].name}</div>
       <div class="t-who">${t.barista ? "Pha chế đang làm" : noPower ? "Cúp điện — bấm để đổi món" : c.name}</div><div class="pbar"><div></div></div>`;
-    if (noPower) d.classList.add("nopower");
-    d.addEventListener("click", () => { if (t.barista || isPaused()) return; if (noPower) return offerSwap(c, t); R.sel = t.id; Sound.sfx("click"); renderTickets(); renderBench(); });
+    if (noPower || noMachine) d.classList.add("nopower");
+    if (noMachine) d.querySelector(".t-who").textContent = "Chưa có máy — bấm để xin lỗi khách";
+    d.addEventListener("click", () => { if (t.barista || isPaused()) return; if (noPower) return offerSwap(c, t); if (noMachine) return apologize(c, t); R.sel = t.id; Sound.sfx("click"); renderTickets(); renderBench(); });
     box.appendChild(d);
   }
   updateBars();
@@ -1720,10 +1802,32 @@ function showReady() {
 function expectedCosts() {
   return S.shops.reduce((a, sh) => a + LOCATIONS[sh.loc].rent + 60000 + ROLE_ORDER.reduce((w, r) => w + (sh.staff[r] ? sh.staff[r].wage : 0), 0), 0);
 }
+// Quán sẵn sàng tự vận hành: đủ 4 vị trí, tất cả cứng tay 100%, Uyên đã đứng quầy đủ 4 tiếng
+function shopCanBeReady(sh) {
+  return ROLE_ORDER.every(r => sh.staff[r] && prof(sh.staff[r], sh) >= 1) && playMin(sh.loc) >= SHOP_READY_MIN;
+}
+function readyText(sh) {
+  const missing = ROLE_ORDER.filter(r => !sh.staff[r]).map(r => ROLES[r].name);
+  if (missing.length) return `Còn thiếu: ${missing.join(", ")}.`;
+  const weak = ROLE_ORDER.filter(r => prof(sh.staff[r], sh) < 1).map(r => `${ROLES[r].name} ${pct(prof(sh.staff[r], sh))}`);
+  const left = Math.max(0, SHOP_READY_MIN - playMin(sh.loc));
+  return `${weak.length ? "Độ cứng tay: " + weak.join(", ") + ". " : ""}${left > 0 ? `Cần Uyên đứng quầy thêm ${fmtMin(left)}.` : ""}`;
+}
+function showShopReady(sh) {
+  sh.ready = true;
+  const L = LOCATIONS[sh.loc];
+  openModal(`🎉 Quán ${L.city} đã tự vận hành được!`, `<div class="intro-wrap"><div class="portrait">${Art.person(Art.UYEN, "happy")}</div><div class="intro-text">
+    Nhân viên quán ${L.city} giờ đã đủ cứng tay: pha chế, phục vụ, dọn dẹp, thu ngân đều trơn tru. Quán có thể vận hành mà không cần Uyên đứng quầy.
+    <div class="row" style="margin-top:8px">${ROLE_ORDER.map(r => `<span class="pill green">${ROLES[r].icon} ${sh.staff[r].name} 100%</span>`).join("")}</div>
+    <p>Giờ Uyên có thể mở chi nhánh mới trong mục <b>🗺️ Chi nhánh</b>.</p>
+    <button class="btn big teal" id="sr-ok">Tuyệt vời!</button></div></div>`, { noClose: true });
+  $("#sr-ok").onclick = () => { save(true); showPrepare(); };
+  Sound.sfx("perfect");
+}
 function canExpand() {
   if (S.shops.length >= Object.keys(LOCATIONS).length) return "Đã phủ khắp 6 thành phố!";
-  const nb = S.shops.findIndex(sh => !sh.staff.barista);
-  if (nb >= 0) return `Quán ${LOCATIONS[S.shops[nb].loc].city} cần có nhân viên Pha chế trước khi Uyên rời đi.`;
+  const nb = S.shops.findIndex(sh => !sh.ready);
+  if (nb >= 0) return `Nhân viên quán ${LOCATIONS[S.shops[nb].loc].city} chưa đủ cứng tay để vận hành khi vắng Uyên. ${readyText(S.shops[nb])}`;
   const wait = (S.lastOpenDay || 1) + MIN_DAYS_BETWEEN_SHOPS - S.day;
   if (wait > 0) return `Cần thêm ${wait} ngày nữa (mỗi quán mới cách quán trước ít nhất ${MIN_DAYS_BETWEEN_SHOPS} ngày).`;
   return null;
@@ -1909,6 +2013,7 @@ const PANELS = {
       const R0 = ROLES[role], st = sh.staff[role], req = roleReq(i, role);
       if (st) return `<div class="slot"><div class="avatar-sm">${Art.person(st.look, "happy")}</div><div class="info"><b>${R0.icon} ${R0.name}: ${st.name}</b> ${stars5(st.skill)} ${st.absent ? '<span class="pill red">🛌 Hôm nay xin nghỉ</span>' : ""}<br>
         ${pills(st)}<span class="pill">Lương ${money(st.wage)}/ngày</span><span class="pill">Đã làm ${st.days} ngày</span>
+        <span class="pill ${prof(st, sh) >= 1 ? "green" : ""}">💪 Cứng tay ${pct(prof(st, sh))}${prof(st, sh) < 1 ? ` · cần Uyên đứng quầy thêm ${fmtMin(STAFF_RAMP_MIN * (1 - prof(st, sh)) / 0.85)}` : ""}</span>
         <div class="sub">${R0.desc}</div>${details(st)}</div>
         <button class="btn gray" data-fire="${role}">Cho nghỉ</button></div>`;
       if (req) return `<div class="slot" style="opacity:.6"><div class="avatar-sm" style="font-size:40px;align-items:center">🔒</div><div class="info"><b>${R0.icon} ${R0.name}</b><br><span class="sub">${R0.desc}</span><br><span class="pill red">${req}</span></div></div>`;
@@ -1920,7 +2025,8 @@ const PANELS = {
           <div class="row" style="margin-top:6px"><b>Lương ${money(c.wage)}/ngày</b><span class="spacer"></span><button class="btn teal" data-hire="${role}" data-k="${k}">Thuê</button></div></div>`).join("") || '<span class="sub">Hết ứng viên hôm nay, quay lại ngày mai hoặc tìm thêm.</span>'}</div></div>`;
     }).join("");
     const body = openModal("👥 Nhân viên", `<div class="tabbar">${tabs}</div>
-      <p class="sub">Thứ tự tuyển: Phục vụ → Tạp vụ → Thu ngân → <b>Pha chế (cuối cùng)</b>. Mỗi vị trí có tối đa 3 ứng viên, mỗi người có ưu điểm (xanh) và có thể kèm nhược điểm (đỏ). Lương trả cuối mỗi ngày; nhân viên lên tay nghề sau mỗi 10 ngày.</p>${slots}`, { panel: "staff" });
+      <div class="card" style="margin-bottom:8px;background:${sh.ready ? "#d8f3dc" : "#fff8ec"}">${sh.ready ? "✅ Quán đã tự vận hành được khi vắng Uyên." : `🌱 Quán chưa tự vận hành được. ${readyText(sh)}`}</div>
+      <p class="sub">Thứ tự tuyển: Phục vụ → Tạp vụ → Thu ngân → <b>Pha chế (cuối cùng)</b>, mỗi vị trí mới mở sau ${HIRE_GAP_DAYS} ngày. Nhân viên mới còn vụng: phục vụ ghi order lác đác, tạp vụ chỉ dọn phụ, pha chế chậm — cứng tay dần khi Uyên đứng quầy cùng họ. Mỗi vị trí có tối đa 3 ứng viên, mỗi người có ưu điểm (xanh) và có thể kèm nhược điểm (đỏ). Lương trả cuối mỗi ngày; nhân viên lên tay nghề sau mỗi 10 ngày.</p>${slots}`, { panel: "staff" });
     on(body, "[data-tab]", "click", b => { staffTab = +b.dataset.tab; refreshPanel(); });
     on(body, "[data-hire]", "click", b => { hire(i, b.dataset.hire, +b.dataset.k); refreshPanel(); });
     on(body, "[data-fire]", "click", b => { fire(i, b.dataset.fire); refreshPanel(); });
