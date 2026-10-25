@@ -1,0 +1,32 @@
+{
+  "name": "cua-hang-nho-cua-uyen",
+  "productName": "Cửa hàng nhỏ của Uyên",
+  "version": "1.0.0",
+  "description": "Game kinh doanh quán cà phê: pha chế, trò chuyện với khách ruột và mở chi nhánh khắp Việt Nam.",
+  "author": "Giang Bao Nguyen <ngiangbao@gmail.com>",
+  "homepage": "https://ngiangbao.github.io/cua-hang-nho-cua-uyen/",
+  "license": "UNLICENSED",
+  "private": true,
+  "main": "main.js",
+  "scripts": {
+    "prepare-app": "node prepare.mjs",
+    "start": "node prepare.mjs && electron .",
+    "dist": "node prepare.mjs && electron-builder --publish never"
+  },
+  "devDependencies": {
+    "electron": "33.2.1",
+    "electron-builder": "25.1.8"
+  },
+  "build": {
+    "appId": "io.github.ngiangbao.cuahangnhocuauyen",
+    "productName": "Cửa hàng nhỏ của Uyên",
+    "artifactName": "CuaHangNhoCuaUyen-${version}-${os}-${arch}.${ext}",
+    "files": ["main.js", "app/**/*"],
+    "directories": { "output": "dist", "buildResources": "build" },
+    "win": { "target": [{ "target": "nsis", "arch": ["x64"] }, { "target": "portable", "arch": ["x64"] }] },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDir": true, "shortcutName": "Cửa hàng nhỏ của Uyên" },
+    "portable": { "artifactName": "CuaHangNhoCuaUyen-${version}-win-portable.${ext}" },
+    "mac": { "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }], "category": "public.app-category.simulation-games", "identity": null },
+    "linux": { "target": ["AppImage", "deb"], "category": "Game", "executableName": "cua-hang-nho-cua-uyen", "maintainer": "Giang Bao Nguyen <ngiangbao@gmail.com>", "synopsis": "Game kinh doanh quán cà phê" }
+  }
+}

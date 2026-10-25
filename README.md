@@ -105,6 +105,21 @@ Phím tắt trên máy tính: `Enter` phục vụ, `Backspace` bỏ bước vừ
 - Muốn tìm và chọn video ngay trong game: tạo một YouTube Data API key miễn phí (Google Cloud Console → bật *YouTube Data API v3* → *Credentials* → *API key*), rồi dán vào mục “Thiết lập tìm kiếm trong game”. Key chỉ lưu trên thiết bị của bạn, không nằm trong file save.
 - Một số video bị chủ kênh chặn phát nhúng; khi đó game sẽ báo để bạn chọn video khác.
 
+## Tải bản cài đặt (Android, Windows, macOS, Linux)
+
+Vào trang [Releases](https://github.com/ngiangbao/cua-hang-nho-cua-uyen/releases/latest) để tải bản mới nhất:
+
+| Nền tảng | File | Cách cài |
+|---|---|---|
+| Android | `CuaHangNhoCuaUyen-…-android.apk` | Mở file trên điện thoại, cho phép “cài ứng dụng không rõ nguồn gốc” nếu được hỏi. Game mở toàn màn hình, xoay ngang. |
+| Windows | `…-win-x64.exe` hoặc `…-win-portable.exe` | Bản `.exe` để cài đặt; bản `portable` chạy luôn không cần cài. Nếu Windows hiện “Windows protected your PC”, bấm **More info → Run anyway**. |
+| macOS | `…-mac-arm64.dmg` (chip Apple M) hoặc `…-mac-x64.dmg` (chip Intel) | Kéo app vào Applications. Lần đầu mở: chuột phải vào app → **Open**. Nếu báo app bị hỏng, chạy `xattr -cr "/Applications/Cửa hàng nhỏ của Uyên.app"` trong Terminal. |
+| Linux | `…-linux-x86_64.AppImage` hoặc `…-linux-amd64.deb` | AppImage: cấp quyền chạy (`chmod +x`) rồi mở. Ubuntu/Debian: cài file `.deb`. |
+
+Bản desktop có sẵn toàn bộ game, chơi được không cần mạng (trừ nhạc YouTube); bấm **F11** để bật/tắt toàn màn hình. Bản Android mở bản web của game nên lần đầu cần mạng. Mỗi bản giữ bản lưu riêng — dùng **Xuất/Nhập file save** để chuyển tiến trình giữa các máy.
+
+Bản cài đặt được build tự động bằng GitHub Actions (`.github/workflows/build.yml`) mỗi khi có tag phiên bản mới (ví dụ `v1.0.0`).
+
 ## Cài lên iPhone / iPad như một ứng dụng
 
 1. Mở link game bằng **Safari**.
