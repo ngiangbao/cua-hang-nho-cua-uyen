@@ -318,19 +318,19 @@ const CITY_STORIES = {
     npc: { name: "Bà Tư bán xôi", look: { g: "f", age: "old", skin: "#e8b88a", hair: "nonla", hc: "#cfcfcf", shirt: "blouse", sc: "#6d597a", acc: [] } },
     reward: { money: 1500000, flow: 0.1 }, perk: "+10% khách quán Hà Nội",
     acts: [
-      { days: 4, title: "Tiếng rao lúc năm giờ sáng",
+      { at: 80, title: "Tiếng rao lúc năm giờ sáng",
         lines: ["Năm giờ sáng, tiếng rao “Xôi đây...” vang lên đầu ngõ. Bà Tư gánh xôi đã bán ở phố này bốn mươi năm.",
                 "“Ngày xưa bà ngồi trước hiên quán ngoại cháu. Mấy năm nay phố đông xe, người ta đuổi bà đi chỗ khác.”"],
         choice: { q: "Uyên có muốn mời bà Tư ngồi bán trước hiên quán không?", a: [
           { label: "Mời bà ngồi trước hiên mỗi sáng", reply: "Bà Tư rưng rưng: “Cháu giống ngoại cháu thật.” Khách mua xôi rồi ghé luôn ly cà phê.", eff: { flow: 0.05, rep: 2 } },
           { label: "Mời bà ly trà nóng, chỉ đường sang chợ", reply: "Bà Tư cảm ơn rồi gánh xôi đi. Uyên thấy lòng hơi chùng xuống.", eff: { money: 0 } } ] } },
-      { local: 10, title: "Mùa hoa sữa",
+      { at: 160, local: 10, title: "Mùa hoa sữa",
         lines: ["Phố cổ vào mùa hoa sữa. Bà Tư kể ngày xưa ông nhà hay mua cốm làng Vòng về pha cà phê cho bà, gọi là “cà phê mùa thu”.",
                 "“Giờ ông đi rồi, bà chẳng còn ai pha cho nữa...”"],
         choice: { q: "Uyên làm gì cho bà Tư?", a: [
           { label: "Pha tặng bà ly cà phê cốm đầu mùa", reply: "Bà Tư uống từng ngụm nhỏ, mắt đỏ hoe: “Đúng vị ông pha ngày xưa.”", eff: { rep: 4 } },
           { label: "Ghi công thức “cà phê mùa thu” lên bảng thực đơn", reply: "Khách phố cổ tò mò gọi thử. Bà Tư cười móm mém khoe với cả ngõ.", eff: { tip: 0.05 } } ] } },
-      { days: 9, rep: 60, title: "Gánh xôi ở lại",
+      { at: 240, rep: 60, title: "Gánh xôi ở lại",
         lines: ["Phường mở đợt dẹp hàng rong. Bà Tư sợ mất chỗ bán cuối cùng.",
                 "Khách quen của quán ký tên kín cả trang giấy: “Gánh xôi bà Tư là một phần của phố cổ.” Phường đồng ý cho bà bán cố định trước hiên quán."] },
     ] },
