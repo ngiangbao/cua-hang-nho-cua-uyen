@@ -60,8 +60,8 @@ button { font-family: inherit; cursor: pointer; border: 0; color: inherit; }
 .staff.busy .work { display: block; animation: bob .5s ease-in-out infinite alternate; }
 .staff .person { animation: breathe 3s ease-in-out infinite; transform-origin: bottom center; }
 
-#customers { position: absolute; inset: 0; z-index: 3; }
-.customer { position: absolute; top: calc(318px + var(--E)); width: 150px; height: 250px; transition: left 1.4s ease-out, opacity .6s; cursor: pointer; }
+#customers { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.customer { position: absolute; top: calc(318px + var(--E)); width: 150px; height: 250px; transition: left 1.4s ease-out, opacity .6s; cursor: pointer; pointer-events: auto; }
 .customer .person { width: 150px; height: 225px; position: absolute; bottom: 0; animation: breathe 2.6s ease-in-out infinite; transform-origin: bottom center; }
 .customer.walking .person { animation: walk .35s ease-in-out infinite alternate; }
 .customer:hover .person { filter: drop-shadow(0 0 8px #fff) brightness(1.05); }
@@ -301,7 +301,7 @@ input[type=range] { accent-color: var(--coral); width: 220px; }
 @keyframes qtehit { 50% { transform: scale(.85); } }
 
 /* ===== TV ===== */
-#tv { position: absolute; left: 790px; top: calc(66px + var(--E)); width: 150px; z-index: 2; cursor: pointer; }
+#tv { position: absolute; left: 790px; top: calc(54px + var(--E)); width: 150px; z-index: 2; cursor: pointer; }
 #tv .tv-screen { width: 150px; height: 88px; background: #1b1b2f; border: 6px solid #3d405b; border-radius: 10px; overflow: hidden; position: relative; box-shadow: 0 6px 12px rgba(0,0,0,.25); }
 #tv .tv-stand { width: 40px; height: 8px; background: #3d405b; margin: 0 auto; border-radius: 0 0 6px 6px; }
 #tv:hover .tv-screen { border-color: var(--coral); }
@@ -331,3 +331,11 @@ input[type=range] { accent-color: var(--coral); width: 220px; }
 .card.item { display: flex; gap: 12px; align-items: center; }
 .item-ic { font-size: 40px; width: 64px; height: 64px; flex: none; border-radius: 16px; background: #fff3e2; display: flex; align-items: center; justify-content: center; }
 .card.item.owned .item-ic { background: #fff3b0; box-shadow: inset 0 0 0 3px var(--sun); }
+
+/* ===== Tạm dừng ===== */
+#pause-cover { position: absolute; left: 0; right: 0; top: 64px; bottom: 0; z-index: 15; background: rgba(60, 40, 35, .45); backdrop-filter: blur(2px);
+  display: flex; align-items: center; justify-content: center; cursor: not-allowed; }
+.pause-card .btn { cursor: pointer; }
+.pause-card { background: var(--paper); border-radius: 26px; padding: 26px 44px; text-align: center; font-size: 30px; font-weight: 800; color: var(--coral-d);
+  box-shadow: 0 16px 40px rgba(0,0,0,.3); display: flex; flex-direction: column; gap: 12px; align-items: center; animation: pop .2s; }
+.pause-ic { font-size: 60px; line-height: 1; }

@@ -502,6 +502,7 @@ function dlgName(c) {
 }
 function clickCustomer(c) {
   if (c.tut) return tutClickCustomer(c);
+  if (isPaused()) return;
   if (c.state !== "order" && c.state !== "drink") return;
   Sound.sfx("click");
   if (c.reg && !S.chars[c.reg.id].met) {
@@ -680,7 +681,7 @@ function startQte(type) {
   R.qte = { type, Q, el: box, left: Q.time * 1000, taps: 0 };
   box.querySelector(".qte-btn").addEventListener("pointerdown", e => {
     e.preventDefault();
-    if (!R.qte || R.qte.el !== box) return;
+    if (!R.qte || R.qte.el !== box || isPaused()) return;
     R.qte.taps++; Sound.sfx("pop");
     const cnt = box.querySelector(".qte-count"); if (cnt) cnt.textContent = `${R.qte.taps}/${Q.taps}`;
     box.querySelector(".qte-btn").classList.remove("hit"); void box.offsetWidth; box.querySelector(".qte-btn").classList.add("hit");
@@ -754,7 +755,7 @@ function grade(cup, recipe) {
 function addIngredient(k) {
   if (R.phase === "tutorial") return tutIngredient(k);
   if (R.phase !== "open") { toast("Quán chưa mở cửa đâu Uyên ơi!", "bad"); return; }
-  if (R.drip) return;
+  if (isPaused() || R.drip) return;
   if (!ingAvail(k)) { const I = INGREDIENTS[k]; toast(`🔒 Cần mua ${EQUIPMENT[I.equip] ? EQUIPMENT[I.equip].name : "công thức"} để dùng ${I.name}`, "bad"); return; }
   if (outageNow() && powerIng(k)) { toast("🔌 Đang cúp điện, máy không chạy được!", "bad"); return; }
   const I = INGREDIENTS[k];
@@ -770,6 +771,7 @@ function addIngredient(k) {
 }
 function serve() {
   if (R.phase === "tutorial") return tutServe();
+  if (isPaused()) return;
   const t = R.tickets.find(t => t.id === R.sel);
   if (!t) { toast("Chọn phiếu order cần phục vụ trước nhé!", "bad"); return; }
   if (!R.cup.length) { toast("Ly còn trống trơn!", "bad"); return; }
@@ -934,11 +936,11 @@ function renderStaff() {
     s.innerHTML = Art.person(look, "happy") + `<div class="tag">${tag}</div><div class="work">☕</div>`;
     layer.appendChild(s);
   };
-  put(Art.UYEN, 700, "Bảo Uyên", "uyen", R.drip);
-  if (sh.staff.barista) put(sh.staff.barista.look, 520, "☕ " + sh.staff.barista.name.split(" ").pop(), "", !!R.bJob);
-  if (sh.staff.cashier) put(sh.staff.cashier.look, 860, "💁 " + sh.staff.cashier.name.split(" ").pop());
-  if (sh.staff.waiter) put(sh.staff.waiter.look, 340, "🧑‍🍳 " + sh.staff.waiter.name.split(" ").pop());
-  if (sh.staff.cleaner) put(sh.staff.cleaner.look, 150, "🧹 " + sh.staff.cleaner.name.split(" ").pop());
+  put(Art.UYEN, 30, "Bảo Uyên", "uyen", R.drip);
+  if (sh.staff.barista) put(sh.staff.barista.look, 440, "☕ " + sh.staff.barista.name.split(" ").pop(), "", !!R.bJob);
+  if (sh.staff.cashier) put(sh.staff.cashier.look, 895, "💁 " + sh.staff.cashier.name.split(" ").pop());
+  if (sh.staff.waiter) put(sh.staff.waiter.look, 300, "🧑‍🍳 " + sh.staff.waiter.name.split(" ").pop());
+  if (sh.staff.cleaner) put(sh.staff.cleaner.look, 170, "🧹 " + sh.staff.cleaner.name.split(" ").pop());
   $("#btn-clean").classList.toggle("hidden", !!sh.staff.cleaner);
 }
 
@@ -1033,7 +1035,7 @@ function renderTickets() {
       <div class="t-cup">${Art.drinkIcon(t.drink)}</div><div class="t-name">${DRINKS[t.drink].name}</div>
       <div class="t-who">${t.barista ? "Pha chế đang làm" : noPower ? "Cúp điện — bấm để đổi món" : c.name}</div><div class="pbar"><div></div></div>`;
     if (noPower) d.classList.add("nopower");
-    d.addEventListener("click", () => { if (t.barista) return; if (noPower) return offerSwap(c, t); R.sel = t.id; Sound.sfx("click"); renderTickets(); renderBench(); });
+    d.addEventListener("click", () => { if (t.barista || isPaused()) return; if (noPower) return offerSwap(c, t); R.sel = t.id; Sound.sfx("click"); renderTickets(); renderBench(); });
     box.appendChild(d);
   }
   updateBars();
@@ -1097,10 +1099,14 @@ function renderDockDots() {
   dot("chain", canExpand() === null);
   dot("kho", Object.keys(INGREDIENTS).some(k => ingAvail(k) && !INGREDIENTS[k].free && (S.inv[k] || 0) < 5));
 }
+// Đang tạm dừng: khóa mọi thao tác pha chế, phục vụ, nhận order
+const isPaused = () => R.phase === "open" && R.paused;
 function setPauseUI() {
   $("#btn-pause").textContent = R.paused ? "▶" : "⏸";
+  $("#pause-cover").classList.toggle("hidden", !isPaused());
+  if (isPaused()) closeDialog();
   const sign = $("#closed-sign");
-  if (R.paused && R.phase === "open") { sign.textContent = "⏸ Tạm dừng"; sign.classList.remove("hidden"); }
+  if (isPaused()) sign.classList.add("hidden");
   else if (R.phase === "open" && R.time >= DAY_END) { sign.textContent = "🔒 Đã đóng cửa"; sign.classList.remove("hidden"); }
   else sign.classList.add("hidden");
 }
@@ -1120,7 +1126,7 @@ function refreshPanel() { const p = $("#modal").dataset.panel; if (p && PANELS[p
 
 // ---------- Màn hình chính ----------
 function showTitle() {
-  R.phase = "title";
+  R.phase = "title"; R.paused = false; setPauseUI();
   const ls = lastSlot(), data = ls ? readSlot(ls) : null;
   const slots = [1, 2, 3].map(n => {
     const d = readSlot(n);
@@ -1712,7 +1718,7 @@ async function searchYT(q) {
 }
 function openTv() {
   if (!S || !["open", "prepare"].includes(R.phase)) return;
-  if (R.qte) return;
+  if (R.qte || isPaused()) return;
   Sound.sfx("click"); closeDialog(); PANELS.music();
 }
 
@@ -1728,15 +1734,16 @@ function bindUI() {
   $("#modal-close").onclick = () => { Sound.sfx("click"); closeModal(); if (R.phase === "prepare") showPrepare(); };
   $("#btn-serve").onclick = serve;
   $("#tv").addEventListener("click", openTv);
-  $("#btn-dump").onclick = () => { if (!R.cup.length) return; R.cup = []; Sound.sfx("pour"); renderBench(); };
-  $("#btn-undo").onclick = () => { if (!R.cup.length) return; R.cup.pop(); Sound.sfx("click"); renderBench(); };
+  $("#btn-dump").onclick = () => { if (!R.cup.length || isPaused()) return; R.cup = []; Sound.sfx("pour"); renderBench(); };
+  $("#btn-undo").onclick = () => { if (!R.cup.length || isPaused()) return; R.cup.pop(); Sound.sfx("click"); renderBench(); };
   $("#btn-clean").onclick = () => {
-    if (R.cleanCd) return;
+    if (R.cleanCd || isPaused()) return;
     R.clean = clamp(R.clean + 40, 0, 100); R.cleanCd = true; $("#btn-clean").disabled = true; Sound.sfx("pop");
     setTimeout(() => { R.cleanCd = false; $("#btn-clean").disabled = false; }, 2000);
     renderHud();
   };
   $("#btn-pause").onclick = () => { if (R.phase !== "open") return; R.paused = !R.paused; setPauseUI(); };
+  $("#pause-cover .btn").onclick = () => { R.paused = false; Sound.sfx("click"); setPauseUI(); };
   $("#btn-speed").onclick = () => { R.speed = R.speed === 1 ? 2 : R.speed === 2 ? 3 : 1; $("#btn-speed").textContent = R.speed + "×"; };
   $("#btn-music").onclick = () => {
     if (!S) return;
