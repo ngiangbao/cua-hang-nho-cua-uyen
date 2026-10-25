@@ -893,18 +893,21 @@ function cityActReady(sh = shop()) {
   return (!a.at || playMin(sh.loc) >= a.at) && (!a.days || days >= a.days) && (!a.local || cs.local >= a.local) && (!a.rep || sh.rep >= a.rep);
 }
 const fmtMin = m => m >= 60 ? `${Math.floor(m / 60)} giờ ${Math.round(m % 60)} phút` : `${Math.max(1, Math.ceil(m))} phút`;
-// Mô tả điều kiện cảnh tiếp theo
+// Số ngày trong game ứng với một khoảng phút chơi thật (theo tốc độ đang chọn)
+const REAL_MIN_PER_DAY = (DAY_END - DAY_START) * MS_PER_MIN / 60000;
+const daysForMin = m => Math.max(1, Math.ceil(m / (REAL_MIN_PER_DAY / Math.max(1, R.speed || 1))));
+// Mô tả cảnh tiếp theo (chưa xem) và còn bao lâu nữa mới tới; câu chuyện xong thì trả về chuỗi rỗng
 function cityNextText(sh) {
   const CS = CITY_STORIES[sh.loc]; if (!CS) return "";
   const cs = cityState(sh.loc), scenes = cityScenes(CS);
-  if (cs.done) return `${CS.icon} “${CS.title}” đã trọn vẹn · ${CS.perk}`;
-  const a = scenes[cs.i], days = S.day - (sh.opened || 1), need = [];
-  if (a.at && playMin(sh.loc) < a.at) need.push(`chơi thêm ${fmtMin(a.at - playMin(sh.loc))} ở quán này`);
-  if (a.days && days < a.days) need.push(`mở quán thêm ${a.days - days} ngày`);
-  if (a.local && cs.local < a.local) need.push(`Uyên bán thêm ${a.local - cs.local} ly ${cityDrinks(sh.loc).map(id => DRINKS[id].name).join(", ")}`);
+  if (cs.done) return "";
+  const a = scenes[cs.i], need = [];
+  const daysOpen = S.day - (sh.opened || 1);
+  const waitDays = Math.max(a.at && playMin(sh.loc) < a.at ? daysForMin(a.at - playMin(sh.loc)) : 0, a.days && daysOpen < a.days ? a.days - daysOpen : 0);
+  if (waitDays > 0) need.push(`còn khoảng ${waitDays} ngày nữa`);
+  if (a.local && cs.local < a.local) need.push(`bán thêm ${a.local - cs.local} ly ${cityDrinks(sh.loc).map(id => DRINKS[id].name).join(" / ")}`);
   if (a.rep && sh.rep < a.rep) need.push(`uy tín quán đạt ${a.rep}`);
-  const part = cityParts(CS)[a.part || 0];
-  return `${CS.icon} “${CS.title}” · ${part} · cảnh ${cs.i + 1}/${scenes.length}${need.length ? " — cần " + need.join(", ") : " — sẵn sàng!"}`;
+  return `${CS.icon} “${CS.title}” · Cảnh tiếp theo (${cs.i + 1}/${scenes.length}): <b>${a.title}</b> — ${need.length ? need.join(", ") : "sẽ diễn ra ngay"}`;
 }
 function applyCityEff(locId, eff, who) {
   const parts = [];
@@ -1879,7 +1882,7 @@ function showPrepare() {
       ${S.marketing.map(m => `<span class="pill green">📣 ${MARKETING[m.id].name} (còn ${m.days} ngày)</span>`).join("")}</div>
     ${S.money < expectedCosts() * 1.2 ? `<div class="card" style="background:#ffe5e5"><h4>⚠️ Két tiền sắp cạn</h4><div>Chi phí cố định cuối ngày khoảng <b>${money(expectedCosts())}</b> (thuê mặt bằng, lương, điện nước) — két hiện có ${money(S.money)}. Két về 0 hoặc âm là phá sản!</div></div>` : ""}
     <h3>Sự kiện hôm nay</h3>${ev}
-    <div class="card" style="margin-top:8px;background:#fff8ec"><div class="sub" style="font-size:16px">📜 ${cityNextText(shop())}</div></div>
+    ${cityNextText(shop()) ? `<div class="card" style="margin-top:8px;background:#fff8ec"><div class="sub" style="font-size:16px">📜 ${cityNextText(shop())}</div></div>` : ""}
     ${R.away && R.away.length ? `<div class="card" style="margin-top:8px"><h4>🛌 Nhân viên xin nghỉ hôm nay</h4><div class="sub">${R.away.join(", ")}</div></div>` : ""}
     <h3>Hôm nay Uyên đứng quầy ở đâu?</h3><div class="grid">${shopsHtml}</div>
     <h3>🎯 Mục tiêu</h3>${R.goals.map(g => `<div class="goal"><span>⬜ ${g.text}</span><span class="rw">+${money(g.reward)}</span></div>`).join("")}
@@ -2117,7 +2120,7 @@ const PANELS = {
           <div>Nhân viên: ${ROLE_ORDER.map(r => sh.staff[r] ? ROLES[r].icon : "▫️").join(" ")}</div>
           <div class="sub">Hôm nay: ${T ? `${T.served} ly · ${money(T.revenue + T.tips)}` : "-"} · Tổng: ${sh.served} ly · Máy: ${Object.keys(sh.equip).length}/${Object.keys(EQUIPMENT).length}</div>
           <div class="sub">🏙️ Món địa phương: ${local}</div>
-          <div class="sub">📜 ${cityNextText(sh)}</div>
+          <div class="sub">📜 ${cityNextText(sh) || `${CITY_STORIES[sh.loc].icon} “${CITY_STORIES[sh.loc].title}” đã trọn vẹn · ${CITY_STORIES[sh.loc].perk}`}</div>
           <div style="margin-top:6px">${k === S.active ? '<span class="pill green">Uyên đang ở đây</span>' : sh.staff.barista ? '<span class="pill">☕ Tự vận hành</span>' : '<span class="pill red">Đóng khi Uyên vắng</span>'}</div></div>`;
       } else {
         const why = reason || (!canAfford(s0.cost) ? `Cần ${money(s0.cost)} (két còn ${money(S.money)}).` : R.phase !== "prepare" ? "Chỉ mở chi nhánh vào đầu ngày." : "");
