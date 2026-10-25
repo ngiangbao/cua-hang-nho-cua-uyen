@@ -24,7 +24,7 @@
     "files": ["main.js", "app/**/*"],
     "directories": { "output": "dist", "buildResources": "build" },
     "win": { "target": [{ "target": "nsis", "arch": ["x64"] }, { "target": "portable", "arch": ["x64"] }] },
-    "nsis": { "oneClick": false, "allowToChangeInstallationDir": true, "shortcutName": "Cửa hàng nhỏ của Uyên" },
+    "nsis": { "oneClick": false, "allowToChangeInstallationDirectory": true, "shortcutName": "Cửa hàng nhỏ của Uyên" },
     "portable": { "artifactName": "CuaHangNhoCuaUyen-${version}-win-portable.${ext}" },
     "mac": { "target": [{ "target": "dmg", "arch": ["x64", "arm64"] }], "category": "public.app-category.simulation-games", "identity": null },
     "linux": { "target": ["AppImage", "deb"], "category": "Game", "executableName": "cua-hang-nho-cua-uyen", "maintainer": "Giang Bao Nguyen <ngiangbao@gmail.com>", "synopsis": "Game kinh doanh quán cà phê" }
