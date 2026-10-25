@@ -11,6 +11,21 @@ Game mô phỏng quán cà phê ấm áp (cozy shop simulation) chạy trực ti
 | 🍁 **3. Thử Thách & Bão Rào Ban Đêm** | Chuỗi cà phê lớn MegaBrew mở gần quán: chọn chạy theo xu hướng hay giữ bản chất bình dị. Rồi một đêm bão làm hư quán, và những khách ruột thân thiết quay lại cùng sửa. Mở sân vườn nhỏ, góc đọc sách, và **phòng thử công thức** để sáng tạo món signature của riêng Uyên. |
 | 🌸 **4. Hương Cà Phê Đơm Hoa** | Uyên tự viết **trang cuối** của sổ tay, hoàn thiện công thức “Ly nước dành cho người đang tìm lại ký ức” — **Ly Ký Ức**. |
 
+### Câu chuyện riêng của từng chi nhánh
+
+Mỗi thành phố có một mạch truyện 3 cảnh với nhân vật và lựa chọn riêng, **chỉ diễn ra khi Uyên đứng quầy ở đúng quán đó**. Cảnh tiếp theo mở khi đủ số ngày mở quán, số ly món địa phương Uyên bán ra và uy tín quán. Lựa chọn của Uyên ảnh hưởng tới quán đó, và hoàn thành câu chuyện sẽ nhận thưởng vĩnh viễn cho riêng quán.
+
+| Quán | Câu chuyện |
+|---|---|
+| 🏮 Hà Nội | **Gánh xôi cuối phố** — bà Tư bán xôi rong bốn mươi năm, mùa hoa sữa và cà phê cốm |
+| 🌆 Sài Gòn | **Hẻm 42 thức giấc** — cô Tám chủ nhà, lời đề nghị từ cao ốc, đêm nhạc hẻm |
+| 🌫️ Đà Lạt | **Cây đàn trong biệt thự sương mù** — những lá thư năm 1968 chưa từng gửi và bà Lan Hương |
+| 🪷 Hội An | **Đêm rằm phố Hội** — chú Bảy lái đò, mùa nước lên, hoa đăng trên sông Hoài |
+| 🌊 Đà Nẵng | **Bình minh làng chài** — quán mở cửa lúc ba giờ sáng, đêm biển động chờ tàu về |
+| 🎋 Huế | **Nhà vườn bên sông Hương** — ngôi nhà rường trăm tuổi, công thức trà cung đình, đêm ca Huế |
+
+![Câu chuyện Hà Nội](docs/screenshots/24-chuyen-ha-noi.png)
+
 Bốn mùa Xuân, Hạ, Thu, Đông luân phiên mỗi 14 ngày, mỗi mùa khách thích một kiểu đồ uống khác nhau. Kỷ vật khách ruột tặng được bày lên kệ tường của từng quán.
 
 **▶ Chơi ngay:** https://ngiangbao.github.io/cua-hang-nho-cua-uyen/

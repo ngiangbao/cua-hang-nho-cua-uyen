@@ -308,3 +308,130 @@ const SIG_BASE = ["phin", "espresso", "tra", "cacao", "matcha", "dau", "dua_tuoi
 const SIG_SWEET = ["sua_dac", "duong", "dua", "sua_chua", "vai", "dao"];
 const SIG_TOP = ["foam", "trung", "muoi", "tran_chau", "cacao"];
 const SIG_MAX = 3;
+
+// ===================== Câu chuyện riêng của từng chi nhánh =====================
+// Chỉ diễn ra khi Uyên đứng quầy ở đúng quán đó. Điều kiện mỗi cảnh: days (số ngày từ khi mở quán),
+// local (số ly món địa phương Uyên bán ở quán), rep (uy tín quán). Lựa chọn có hiệu ứng: money, rep, flow, tip (riêng quán).
+const CITY_STORIES = {
+  hanoi: { title: "Gánh xôi cuối phố", icon: "🏮",
+    npc: { name: "Bà Tư bán xôi", look: { g: "f", age: "old", skin: "#e8b88a", hair: "nonla", hc: "#cfcfcf", shirt: "blouse", sc: "#6d597a", acc: [] } },
+    reward: { money: 1500000, flow: 0.1 }, perk: "+10% khách quán Hà Nội",
+    acts: [
+      { days: 4, title: "Tiếng rao lúc năm giờ sáng",
+        lines: ["Năm giờ sáng, tiếng rao “Xôi đây...” vang lên đầu ngõ. Bà Tư gánh xôi đã bán ở phố này bốn mươi năm.",
+                "“Ngày xưa bà ngồi trước hiên quán ngoại cháu. Mấy năm nay phố đông xe, người ta đuổi bà đi chỗ khác.”"],
+        choice: { q: "Uyên có muốn mời bà Tư ngồi bán trước hiên quán không?", a: [
+          { label: "Mời bà ngồi trước hiên mỗi sáng", reply: "Bà Tư rưng rưng: “Cháu giống ngoại cháu thật.” Khách mua xôi rồi ghé luôn ly cà phê.", eff: { flow: 0.05, rep: 2 } },
+          { label: "Mời bà ly trà nóng, chỉ đường sang chợ", reply: "Bà Tư cảm ơn rồi gánh xôi đi. Uyên thấy lòng hơi chùng xuống.", eff: { money: 0 } } ] } },
+      { local: 10, title: "Mùa hoa sữa",
+        lines: ["Phố cổ vào mùa hoa sữa. Bà Tư kể ngày xưa ông nhà hay mua cốm làng Vòng về pha cà phê cho bà, gọi là “cà phê mùa thu”.",
+                "“Giờ ông đi rồi, bà chẳng còn ai pha cho nữa...”"],
+        choice: { q: "Uyên làm gì cho bà Tư?", a: [
+          { label: "Pha tặng bà ly cà phê cốm đầu mùa", reply: "Bà Tư uống từng ngụm nhỏ, mắt đỏ hoe: “Đúng vị ông pha ngày xưa.”", eff: { rep: 4 } },
+          { label: "Ghi công thức “cà phê mùa thu” lên bảng thực đơn", reply: "Khách phố cổ tò mò gọi thử. Bà Tư cười móm mém khoe với cả ngõ.", eff: { tip: 0.05 } } ] } },
+      { days: 9, rep: 60, title: "Gánh xôi ở lại",
+        lines: ["Phường mở đợt dẹp hàng rong. Bà Tư sợ mất chỗ bán cuối cùng.",
+                "Khách quen của quán ký tên kín cả trang giấy: “Gánh xôi bà Tư là một phần của phố cổ.” Phường đồng ý cho bà bán cố định trước hiên quán."] },
+    ] },
+  saigon: { title: "Hẻm 42 thức giấc", icon: "🌆",
+    npc: { name: "Cô Tám chủ nhà", look: { g: "f", age: "mid", skin: "#e0ac69", hair: "bun", hc: "#2b1b12", shirt: "blouse", sc: "#ff99c8", acc: ["earrings"] } },
+    reward: { money: 2000000, flow: 0.12 }, perk: "+12% khách quán Sài Gòn",
+    acts: [
+      { days: 2, title: "Con hẻm ngủ quên",
+        lines: ["Cô Tám, chủ nhà cho thuê mặt bằng, ngồi quạt phành phạch: “Hồi xưa hẻm 42 đông vui lắm con. Giờ tụi nhỏ lên chung cư hết, hẻm buồn hiu.”",
+                "Cô chỉ dãy đèn dây cũ mèm vắt ngang hẻm: “Lâu rồi không ai bật nữa.”"],
+        choice: { q: "Uyên muốn làm gì cho con hẻm?", a: [
+          { label: "Mua đèn mới, treo sáng cả hẻm", reply: "Tối đó hẻm 42 sáng rực. Mấy đứa nhỏ chạy ra chơi, người lớn kê ghế ngồi hóng mát.", eff: { money: -300000, flow: 0.05 } },
+          { label: "Mở chợ phiên đồ cũ cuối tuần trước quán", reply: "Chợ phiên nhỏ xíu mà vui. Ai mua đồ xong cũng ghé làm ly trà tắc.", eff: { tip: 0.05 } } ] } },
+      { local: 10, title: "Lời đề nghị từ cao ốc",
+        lines: ["Một người đàn ông mặc vest bước vào: “Công ty tôi muốn mua cả dãy nhà này xây cao ốc. Giá rất tốt.”",
+                "Cô Tám nhìn Uyên: “Cô già rồi... cô nghe con. Con thấy sao?”"],
+        choice: { q: "Uyên khuyên cô Tám thế nào?", a: [
+          { label: "Giữ lại hẻm, đây là nhà của bao người", reply: "Cô Tám đập bàn: “Đúng! Bán rồi lấy đâu ra hẻm 42!” Cả hẻm vỗ tay.", eff: { rep: 6 } },
+          { label: "Thương lượng để giữ lại quán và vài nhà", reply: "Cuộc thương lượng kéo dài. Cuối cùng công ty rút lui, nhưng cô Tám được đền bù làm lại mái nhà.", eff: { money: 800000 } } ] } },
+      { days: 9, rep: 60, title: "Đêm nhạc hẻm",
+        lines: ["Tối thứ bảy, cả hẻm kê bàn ghế ra đường. Chú Sáu đờn ca tài tử, mấy đứa sinh viên đánh guitar, quán Uyên mang trà tắc ra mời.",
+                "Cô Tám cười rạng rỡ: “Hẻm 42 thức giấc rồi con ơi!”"] },
+    ] },
+  dalat: { title: "Cây đàn trong biệt thự sương mù", icon: "🌫️",
+    npc: { name: "Bà Lan Hương", look: { g: "f", age: "old", skin: "#f3cfa8", hair: "bob", hc: "#e0e0e0", shirt: "blouse", sc: "#b5838d", acc: ["scarf", "glasses"] } },
+    reward: { money: 2000000, tip: 0.1 }, perk: "+10% tip quán Đà Lạt",
+    acts: [
+      { days: 2, title: "Chiếc piano phủ bụi",
+        lines: ["Quán Đà Lạt nằm trong một biệt thự cũ. Dọn gác mái, Uyên thấy một cây piano phủ bạt và một hộp thiếc đầy thư.",
+                "Những lá thư đề năm 1968, ký tên “Minh Khôi”, gửi cho một người tên Lan Hương. Chưa lá nào được gửi đi."],
+        choice: { q: "Uyên làm gì với những lá thư?", a: [
+          { label: "Giữ gìn cẩn thận, đặt ở góc quán", reply: "Uyên lau sạch cây đàn, đặt hộp thư bên cạnh. Khách tò mò hỏi han, ai cũng muốn biết câu chuyện.", eff: { rep: 3 } },
+          { label: "Mời thợ lên dây đàn để khách chơi", reply: "Tiếng piano vang lại sau năm mươi năm. Khách ngồi lâu hơn, gọi thêm ca cao nóng.", eff: { money: -200000, tip: 0.04 } } ] } },
+      { local: 10, title: "Đi tìm Lan Hương",
+        lines: ["Lá thư cuối viết: “Nếu em đọc được, hãy tới biệt thự vào ngày sương dày nhất. Anh sẽ đàn cho em nghe bản nhạc anh viết.”",
+                "Uyên muốn tìm người phụ nữ tên Lan Hương."],
+        choice: { q: "Uyên tìm cách nào?", a: [
+          { label: "Hỏi bà Mười, người ở đây lâu năm nhất", reply: "Bà Mười trầm ngâm: “Lan Hương... con gái nhà may trên dốc. Bà ấy vẫn sống ở Đà Lạt.”", eff: { rep: 3 } },
+          { label: "Đăng câu chuyện lên trang của quán", reply: "Bài đăng lan khắp nơi. Ba ngày sau, có người nhắn: “Đó là bà ngoại tôi.”", eff: { flow: 0.04 } } ] } },
+      { days: 9, rep: 60, title: "Bản nhạc ngày sương dày",
+        lines: ["Một buổi sáng sương trắng xóa, bà Lan Hương chống gậy bước vào. Bà đọc từng lá thư rất lâu.",
+                "Rồi bà ngồi xuống cây piano, chơi bản nhạc mà Minh Khôi từng ngân cho bà nghe. Cả quán lặng đi.",
+                "“Cảm ơn cháu. Năm mươi năm, cuối cùng bà cũng nghe được lời anh ấy.”"] },
+    ] },
+  hoian: { title: "Đêm rằm phố Hội", icon: "🪷",
+    npc: { name: "Chú Bảy lái đò", look: { g: "m", age: "old", skin: "#c68642", hair: "cap", hc: "#9e9e9e", shirt: "shirt", sc: "#2a9d8f", acc: ["mustache"] } },
+    reward: { money: 2500000, flow: 0.1 }, perk: "+10% khách quán Hội An",
+    acts: [
+      { days: 2, title: "Đèn tắt, lồng đèn sáng",
+        lines: ["Đêm rằm, phố Hội tắt hết đèn điện, chỉ còn lồng đèn và nến. Chú Bảy lái đò ghé quán: “Con có muốn làm hoa đăng thả sông không?”"],
+        choice: { q: "Uyên tham gia đêm rằm thế nào?", a: [
+          { label: "Làm hoa đăng tặng khách thả sông", reply: "Mỗi khách nhận một chiếc hoa đăng giấy. Dòng sông Hoài lung linh những điều ước.", eff: { money: -200000, flow: 0.05 } },
+          { label: "Mở quán bằng ánh nến, bán trà lá dứa", reply: "Quán chìm trong ánh nến ấm áp, khách nói chuyện thì thầm như sợ làm vỡ đêm.", eff: { tip: 0.05 } } ] } },
+      { local: 10, title: "Mùa nước lên",
+        lines: ["Mùa lũ về, nước sông Hoài dâng tận bậc thềm. Chú Bảy chèo đò chở hàng giúp các nhà dọc phố.",
+                "“Quán con thấp, nước vô tới nơi rồi!”"],
+        choice: { q: "Uyên xử lý thế nào?", a: [
+          { label: "Kê hàng lên cao, mở cửa cho người tránh lũ", reply: "Quán thành chỗ trú cho mấy gia đình. Uyên nấu nước mót nóng mời cả xóm.", eff: { rep: 6, money: -300000 } },
+          { label: "Đóng cửa sớm, giữ an toàn cho máy móc", reply: "Máy móc an toàn. Chú Bảy chèo đò ngang qua vẫy tay: “Mai nước rút là mở lại nghen!”", eff: { money: 300000 } } ] } },
+      { days: 9, rep: 60, title: "Điều ước trên sông",
+        lines: ["Lũ rút, phố Hội lại đón đêm rằm. Chú Bảy mời Uyên lên đò thả hoa đăng.",
+                "Chú kể vợ chú mất trong một mùa lũ năm xưa. Mỗi đêm rằm, chú thả một chiếc hoa đăng cho bà.",
+                "Năm nay, chú thả hai chiếc: “Một cho bà nhà, một cho cái quán nhỏ đã giữ ấm cả xóm.”"] },
+    ] },
+  danang: { title: "Bình minh làng chài", icon: "🌊",
+    npc: { name: "Chị Sương vợ ngư dân", look: { g: "f", age: "mid", skin: "#b5774a", hair: "nonla", hc: "#1a1a1a", shirt: "blouse", sc: "#48cae4", acc: [] } },
+    reward: { money: 2500000, tip: 0.1 }, perk: "+10% tip quán Đà Nẵng",
+    acts: [
+      { days: 2, title: "Ba giờ sáng ở bến",
+        lines: ["Ngư dân làng chài ra khơi từ ba giờ sáng. Chị Sương, vợ một ngư dân, hỏi: “Quán có mở sớm không em? Mấy ổng cần ly cà phê cho tỉnh trước khi ra biển.”"],
+        choice: { q: "Uyên trả lời sao?", a: [
+          { label: "Mở cửa từ ba giờ sáng cho ngư dân", reply: "Ánh đèn quán là thứ cuối cùng các anh thấy trước khi ra khơi. Họ gọi quán là “ngọn hải đăng nhỏ”.", eff: { rep: 4 } },
+          { label: "Pha sẵn bình cà phê đá gửi ra bến", reply: "Mỗi sáng chị Sương ghé lấy bình cà phê. Các anh ngư dân trả tiền bằng cá tươi... và bằng tiền nữa.", eff: { money: 500000 } } ] } },
+      { local: 10, title: "Đêm biển động",
+        lines: ["Bão biển bất ngờ kéo tới. Tàu của chồng chị Sương chưa về. Cả xóm tụ lại chờ tin.",
+                "Chị Sương ngồi lặng ở góc quán, tay nắm chặt chiếc điện thoại."],
+        choice: { q: "Uyên làm gì?", a: [
+          { label: "Mở quán suốt đêm cho mọi người chờ tin", reply: "Uyên pha từng bình nước dừa, ca cao nóng. Không ai phải chờ một mình.", eff: { rep: 6, money: -200000 } },
+          { label: "Ngồi cạnh chị Sương, nắm tay chị", reply: "Uyên chẳng nói gì, chỉ ngồi đó. Chị Sương tựa vào vai Uyên, khóc không thành tiếng.", eff: { rep: 3 } } ] } },
+      { days: 9, rep: 60, title: "Tàu về bến",
+        lines: ["Rạng sáng, tiếng còi tàu vang lên ngoài khơi. Đoàn tàu về đủ, không thiếu một ai.",
+                "Cả làng làm lễ cầu ngư. Chị Sương mang tới quán một rổ cá tươi và chiếc phao cứu sinh cũ: “Treo ở quán đi em. Để ai cũng nhớ có một nơi chờ mình trở về.”"] },
+    ] },
+  hue: { title: "Nhà vườn bên sông Hương", icon: "🎋",
+    npc: { name: "Ông Khải giữ nhà vườn", look: { g: "m", age: "old", skin: "#eab991", hair: "bald", hc: "#e0e0e0", shirt: "aodai", sc: "#5e548e", acc: ["glasses", "beard"] } },
+    reward: { money: 3000000, flow: 0.1 }, perk: "+10% khách quán Huế",
+    acts: [
+      { days: 2, title: "Ngôi nhà rường trăm tuổi",
+        lines: ["Quán Huế thuê lại một góc nhà vườn. Ông Khải, người giữ nhà, kể: “Nhà này trăm năm rồi. Cháu nội ông muốn bán, xây khách sạn.”",
+                "Ông vuốt cột gỗ mít đã lên nước bóng: “Ông già rồi, không giữ nổi nữa.”"],
+        choice: { q: "Uyên muốn giúp ông Khải thế nào?", a: [
+          { label: "Mở góc trưng bày lịch sử nhà vườn trong quán", reply: "Khách đến uống trà, ngắm cột kèo chạm trổ, nghe ông Khải kể chuyện. Ai cũng tiếc nếu nhà bị bán.", eff: { rep: 4 } },
+          { label: "Góp tiền sửa lại mái ngói dột", reply: "Mái ngói được lợp lại. Ông Khải đứng ngắm hoài: “Lâu lắm rồi nhà không đẹp vậy.”", eff: { money: -400000, flow: 0.05 } } ] } },
+      { local: 10, title: "Công thức trà cung đình",
+        lines: ["Ông Khải lấy ra một cuốn sổ chép tay của ông cố từng làm ngự trù: công thức trà dâng vua với hoa sen, kỷ tử và cam thảo.",
+                "“Ông cho cháu đó. Đừng để nó mất theo ông.”"],
+        choice: { q: "Uyên giữ công thức thế nào?", a: [
+          { label: "Pha đúng như xưa, kể chuyện cho từng khách", reply: "Mỗi ly trà cung đình đi kèm một câu chuyện. Khách Huế gật gù: “Đúng vị rồi.”", eff: { tip: 0.05 } },
+          { label: "Mở lớp pha trà cho người trẻ", reply: "Lớp học đầu tiên có mười hai bạn trẻ. Trong đó có... cậu cháu nội của ông Khải.", eff: { rep: 5 } } ] } },
+      { days: 9, rep: 60, title: "Đêm ca Huế ở nhà vườn",
+        lines: ["Đêm trăng, nhà vườn rộn ràng tiếng đàn tranh, đàn nguyệt. Nam hát Nam Ai, khách ngồi kín sân.",
+                "Cậu cháu nội ông Khải đứng nhìn rất lâu rồi nói: “Ông ơi, con không bán nhà nữa. Con sẽ giữ nó, cùng quán của chị Uyên.”",
+                "Ông Khải cười, mắt rưng rưng nhìn ra sông Hương."] },
+    ] },
+};
