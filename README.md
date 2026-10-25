@@ -13,16 +13,18 @@ Game mô phỏng quán cà phê ấm áp (cozy shop simulation) chạy trực ti
 
 ### Câu chuyện riêng của từng chi nhánh
 
-Mỗi thành phố có một mạch truyện 3 cảnh với nhân vật và lựa chọn riêng, **chỉ diễn ra khi Uyên đứng quầy ở đúng quán đó**. Cảnh tiếp theo mở khi đủ số ngày mở quán, số ly món địa phương Uyên bán ra và uy tín quán. Lựa chọn của Uyên ảnh hưởng tới quán đó, và hoàn thành câu chuyện sẽ nhận thưởng vĩnh viễn cho riêng quán.
+Mỗi chi nhánh có bố cục, trang trí và câu chuyện riêng, **chỉ diễn ra khi Uyên đứng quầy ở đúng quán đó**. Các chi nhánh mới có câu chuyện 4 phần, 9 cảnh, trải dài **4 tiếng chơi thật** tại quán (chỉ tính lúc đang chơi, tăng tốc game không rút ngắn được). Một số cảnh cần bán đủ món đặc trưng hoặc đạt uy tín. Lựa chọn của Uyên tác động riêng lên quán đó; đồ trang trí trong quán thay đổi theo câu chuyện.
 
-| Quán | Câu chuyện |
-|---|---|
-| 🏮 Hà Nội | **Gánh xôi cuối phố** — bà Tư bán xôi rong bốn mươi năm, mùa hoa sữa và cà phê cốm |
-| 🌆 Sài Gòn | **Hẻm 42 thức giấc** — cô Tám chủ nhà, lời đề nghị từ cao ốc, đêm nhạc hẻm |
-| 🌫️ Đà Lạt | **Cây đàn trong biệt thự sương mù** — những lá thư năm 1968 chưa từng gửi và bà Lan Hương |
-| 🪷 Hội An | **Đêm rằm phố Hội** — chú Bảy lái đò, mùa nước lên, hoa đăng trên sông Hoài |
-| 🌊 Đà Nẵng | **Bình minh làng chài** — quán mở cửa lúc ba giờ sáng, đêm biển động chờ tàu về |
-| 🎋 Huế | **Nhà vườn bên sông Hương** — ngôi nhà rường trăm tuổi, công thức trà cung đình, đêm ca Huế |
+| Quán | Câu chuyện | Phong cách quán |
+|---|---|---|
+| 🏮 Hà Nội | **Gánh xôi cuối phố** — bà Tư bán xôi rong, mùa hoa sữa và cà phê cốm | Nhà gỗ, ốp gỗ, cửa sổ ô, chuông gió |
+| 🌆 Sài Gòn | **Sài Gòn Bạc Xỉu & Nhịp Sống Đêm** — chung cư cũ Quận 1, Góc Trút Bỏ Nỗi Buồn, đêm nhạc unplugged, đèn vàng không bao giờ tắt | Gạch bông, cửa song sắt, cây treo, dây đèn vàng |
+| 🌲 Đà Lạt | **Sương Mù & Tách Trà Dã Quỳ** — căn nhà gỗ trên triền dốc, trà dã quỳ, mùa đông cô đơn, thư tay quay về | Tường gỗ ghép, rừng thông, dã quỳ, thảo mộc phơi |
+| 🏮 Hội An | **Đèn Lồng Rực Rỡ & Trà Mót Thảo Mộc** — đêm rằm lên đèn, mùa lũ, hoa giấy nở lại sau mưa | Tường vàng, hoa giấy, cửa vòm, đèn lồng |
+| 🌊 Đà Nẵng | **Sóng Biển & Ly Matcha Dừa** — gió biển Mỹ Khê, mùa bão biển, bình minh trên Biển Đông | Sọc xanh trắng, cửa kính toàn cảnh, ván lướt sóng |
+| 🏰 Huế | **Mưa Cố Đô & Trà Cung Đình** — nhà vườn bên sông Hương, mưa dầm, góc đĩa than, chiều tím mộng mơ | Cột gỗ nhà rường, cửa sổ tròn, chậu sen, máy hát |
+
+![Sáu chi nhánh](docs/screenshots/25-sau-chi-nhanh.png)
 
 ![Câu chuyện Hà Nội](docs/screenshots/24-chuyen-ha-noi.png)
 

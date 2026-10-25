@@ -58,7 +58,7 @@ function newState() {
     secrets: {}, chars: {}, history: [], achv: {},
     totals: { served: 0, perfect: 0, earned: 0, chats: 0 },
     flowBonus: 0, marketing: [], settings: { music: 0.5, sfx: 0.6, hints: true, musicOn: true, musicPreset: "auto" },
-    items: { phin_ngoai: 1 }, setsDone: {}, tipLoc: {}, signatures: [], story: newStory(), cityStory: {}, shopPerk: {},
+    items: { phin_ngoai: 1 }, setsDone: {}, tipLoc: {}, signatures: [], story: newStory(), cityStory: {}, shopPerk: {}, playMs: {},
     introDone: false, debtDays: 0, lastReport: null, repV2: true,
   };
   S = st; st.shops.push(newShop("hanoi", true));
@@ -102,7 +102,7 @@ function migrate(st) {
   (merged.shops || []).forEach(sh => { sh.inv = sh.inv || starterInv(sh.loc); sh.target = sh.target || starterInv(sh.loc); sh.equip = sh.equip || {}; });
   merged.story = Object.assign(newStory(), st.story || {});
   merged.signatures = st.signatures || [];
-  merged.cityStory = st.cityStory || {}; merged.shopPerk = st.shopPerk || {};
+  merged.cityStory = st.cityStory || {}; merged.shopPerk = st.shopPerk || {}; merged.playMs = st.playMs || {};
   if (!merged.repV2) { (merged.shops || []).forEach(sh => sh.rep = Math.min(100, sh.rep + 20)); merged.repV2 = true; }
   const oldTrait = { cham: "nhanh", duyen: "duyen", can: "taynghe", vui: "thanthien" };
   (merged.shops || []).forEach(sh => Object.values(sh.staff).forEach(x => { if (x && !x.perks) { x.perks = [oldTrait[x.trait] || "nhanh"]; x.flaws = []; delete x.trait; } }));
@@ -140,7 +140,7 @@ function fit() {
   const st = $("#stage");
   st.style.height = H + "px";
   st.style.setProperty("--E", E + "px");
-  if (E !== R.E) { R.E = E; if (S) { $("#scene-bg").innerHTML = Art.sceneBg(shop().loc, shop().decor, E, shelfItems()); renderStaff(); R.customers.forEach(c => { if (c.el) c.el.style.left = slotX(c.slot, maxSlots()) + "px"; }); } }
+  if (E !== R.E) { R.E = E; if (S) { $("#scene-bg").innerHTML = Art.sceneBg(shop().loc, shop().decor, E, shelfItems(), cityProg(shop())); renderStaff(); R.customers.forEach(c => { if (c.el) c.el.style.left = slotX(c.slot, maxSlots()) + "px"; }); } }
   st.style.transform = `scale(${s})`;
   st.style.left = pl + (w - 1600 * s) / 2 + "px";
   st.style.top = pt + (h - H * s) / 2 + "px";
@@ -327,6 +327,7 @@ function frame(now) {
     R.acc += dt * R.speed;
     while (R.acc >= MS_PER_MIN) { R.acc -= MS_PER_MIN; tickMinute(); if (R.phase !== "open") break; }
     if (R.qte) qteTick(dt);
+    const lc = shop().loc; S.playMs = S.playMs || {}; S.playMs[lc] = (S.playMs[lc] || 0) + dt;
   }
   requestAnimationFrame(frame);
 }
@@ -799,29 +800,42 @@ function showSeason() {
 }
 // ---------- Câu chuyện riêng của từng chi nhánh ----------
 const perkOf = (locId, key) => ((S.shopPerk || {})[locId] || {})[key] || 0;
-function cityState(locId) { return S.cityStory[locId] || (S.cityStory[locId] = { act: 0, local: 0 }); }
+// Chuẩn hóa: câu chuyện dạng "acts" (Hà Nội) và dạng "scenes" (các chi nhánh khác)
+const cityScenes = CS => CS.scenes || CS.acts.map(a => Object.assign({ who: 0, part: 0 }, a));
+const cityNpcs = CS => CS.npcs || [CS.npc];
+const cityParts = CS => CS.parts || [CS.title];
+const cityDrinks = locId => { const CS = CITY_STORIES[locId]; return (CS && CS.drinks) || Object.keys(DRINKS).filter(id => DRINKS[id].only === locId); };
+// Số phút chơi thật Uyên đã đứng quầy ở quán (không tính lúc tạm dừng, mở bảng, hội thoại)
+const playMin = locId => ((S.playMs || {})[locId] || 0) / 60000;
+// Số cảnh đã xem ở quán (dùng để đổi đồ trang trí theo câu chuyện)
+const cityProg = sh => { const cs = S && S.cityStory && S.cityStory[sh.loc]; return cs ? (cs.done ? 99 : (cs.i != null ? cs.i : cs.act || 0)) : 0; };
+function cityState(locId) {
+  const cs = S.cityStory[locId] || (S.cityStory[locId] = { i: 0, local: 0 });
+  if (cs.i == null) cs.i = cs.act || 0;
+  return cs;
+}
 function cityAct(sh = shop()) {
   const CS = CITY_STORIES[sh.loc], cs = cityState(sh.loc);
-  return CS && !cs.done ? CS.acts[cs.act] : null;
+  return CS && !cs.done ? cityScenes(CS)[cs.i] : null;
 }
 function cityActReady(sh = shop()) {
   const a = cityAct(sh); if (!a) return false;
   const cs = cityState(sh.loc), days = S.day - (sh.opened || 1);
-  return (!a.days || days >= a.days) && (!a.local || cs.local >= a.local) && (!a.rep || sh.rep >= a.rep);
+  return (!a.at || playMin(sh.loc) >= a.at) && (!a.days || days >= a.days) && (!a.local || cs.local >= a.local) && (!a.rep || sh.rep >= a.rep);
 }
+const fmtMin = m => m >= 60 ? `${Math.floor(m / 60)} giờ ${Math.round(m % 60)} phút` : `${Math.max(1, Math.ceil(m))} phút`;
 // Mô tả điều kiện cảnh tiếp theo
 function cityNextText(sh) {
-  const CS = CITY_STORIES[sh.loc], cs = cityState(sh.loc);
-  if (!CS) return "";
+  const CS = CITY_STORIES[sh.loc]; if (!CS) return "";
+  const cs = cityState(sh.loc), scenes = cityScenes(CS);
   if (cs.done) return `${CS.icon} “${CS.title}” đã trọn vẹn · ${CS.perk}`;
-  const a = CS.acts[cs.act], days = S.day - (sh.opened || 1), need = [];
+  const a = scenes[cs.i], days = S.day - (sh.opened || 1), need = [];
+  if (a.at && playMin(sh.loc) < a.at) need.push(`chơi thêm ${fmtMin(a.at - playMin(sh.loc))} ở quán này`);
   if (a.days && days < a.days) need.push(`mở quán thêm ${a.days - days} ngày`);
-  if (a.local && cs.local < a.local) {
-    const names = Object.keys(DRINKS).filter(id => DRINKS[id].only === sh.loc).map(id => DRINKS[id].name).join(", ");
-    need.push(`Uyên bán ${a.local - cs.local} ly món địa phương (${names})`);
-  }
+  if (a.local && cs.local < a.local) need.push(`Uyên bán thêm ${a.local - cs.local} ly ${cityDrinks(sh.loc).map(id => DRINKS[id].name).join(", ")}`);
   if (a.rep && sh.rep < a.rep) need.push(`uy tín quán đạt ${a.rep}`);
-  return `${CS.icon} “${CS.title}” · cảnh ${cs.act + 1}/${CS.acts.length}: ${a.title}${need.length ? " — cần " + need.join(", ") : " — sẵn sàng!"}`;
+  const part = cityParts(CS)[a.part || 0];
+  return `${CS.icon} “${CS.title}” · ${part} · cảnh ${cs.i + 1}/${scenes.length}${need.length ? " — cần " + need.join(", ") : " — sẵn sàng!"}`;
 }
 function applyCityEff(locId, eff, who) {
   const parts = [];
@@ -834,27 +848,27 @@ function applyCityEff(locId, eff, who) {
   if (parts.length) toast(`🎁 ${who}: ${parts.join(", ")}`, "gold");
 }
 function showCityAct() {
-  const sh = shop(), CS = CITY_STORIES[sh.loc], cs = cityState(sh.loc), a = CS.acts[cs.act];
-  const last = cs.act === CS.acts.length - 1;
-  const head = `${CS.icon} ${CS.title} · ${a.title}`;
+  const sh = shop(), CS = CITY_STORIES[sh.loc], cs = cityState(sh.loc), scenes = cityScenes(CS), a = scenes[cs.i];
+  const npc = a.who === "uyen" ? { name: "Bảo Uyên", look: Art.UYEN } : cityNpcs(CS)[a.who || 0];
+  const head = `${CS.icon} ${cityParts(CS)[a.part || 0]} · ${a.title}`;
   const finish = () => {
-    cs.act++;
-    if (cs.act >= CS.acts.length) {
+    cs.i++;
+    if (cs.i >= scenes.length) {
       cs.done = true;
       applyCityEff(sh.loc, CS.reward, `Câu chuyện “${CS.title}”`);
       Sound.sfx("perfect");
     }
-    addFragments(2, "câu chuyện của quán " + LOCATIONS[sh.loc].city);
-    save(true); showPrepare();
+    addFragments(1, "câu chuyện của quán " + LOCATIONS[sh.loc].city);
+    buildScene(); save(true); showPrepare();
   };
-  storyModal(head, CS.npc.look, a.lines, a.choice ? "▶ Tiếp" : "🎉 Thật ấm lòng", () => {
+  storyModal(head, npc.look, a.lines, a.choice ? "▶ Tiếp" : cs.i === scenes.length - 1 ? "🌸 Trọn vẹn" : "▶ Tiếp tục", () => {
     if (!a.choice) return finish();
     openModal(head, `<div class="intro-wrap"><div class="portrait">${Art.person(Art.UYEN, "neutral")}</div><div class="intro-text">${a.choice.q}
       <div class="dlg-choices" style="margin-top:14px;flex-direction:column;align-items:stretch">${a.choice.a.map((o, k) => `<button data-ca="${k}">💬 ${o.label}</button>`).join("")}</div></div></div>`, { noClose: true });
-    on($("#modal-body"), "[data-ca]", "click", b => {
-      const o = a.choice.a[+b.dataset.ca];
+    on($("#modal-body"), "[data-ca]", "click", btn => {
+      const o = a.choice.a[+btn.dataset.ca];
       Sound.sfx("click");
-      storyModal(head, CS.npc.look, [o.reply], "▶ Tiếp tục", () => { applyCityEff(sh.loc, o.eff || {}, CS.npc.name); finish(); });
+      storyModal(head, npc.look, [o.reply], "▶ Tiếp tục", () => { applyCityEff(sh.loc, o.eff || {}, npc.name); finish(); });
     });
   });
 }
@@ -945,7 +959,7 @@ function giveItem(id, from) {
   toast(`📚 Kỷ vật mới: ${I.icon} ${I.name}${from ? " — từ " + from : ""}`, "gold");
   Sound.sfx("heart");
   checkSets(); renderDockDots();
-  if (["open", "prepare"].includes(R.phase)) $("#scene-bg").innerHTML = Art.sceneBg(shop().loc, shop().decor, R.E, shelfItems());
+  if (["open", "prepare"].includes(R.phase)) $("#scene-bg").innerHTML = Art.sceneBg(shop().loc, shop().decor, R.E, shelfItems(), cityProg(shop()));
   addFragments(2, "nhận kỷ vật");
 }
 function checkSouvenirs() {
@@ -1142,7 +1156,7 @@ function resolveServe(c, q, byStaff) {
   if (q !== "wrong") {
     T.served++; R.today.served++; sh.served++; S.totals.served++;
     R.today.drinks[c.drink] = (R.today.drinks[c.drink] || 0) + 1;
-    if (d.only === sh.loc) cityState(sh.loc).local++;
+    if (cityDrinks(sh.loc).includes(c.drink)) cityState(sh.loc).local++;
   }
   if (q === "perfect") { T.perfect++; R.today.perfect++; sh.perfect++; S.totals.perfect++; }
   let dRep = { perfect: 0.6, good: 0.3, ok: -0.2, wrong: -1 }[q];
@@ -1437,7 +1451,7 @@ function checkAchv() {
 function buildScene() {
   const sh = shop();
   document.documentElement.style.setProperty("--accent", loc(sh).accent);
-  $("#scene-bg").innerHTML = Art.sceneBg(sh.loc, sh.decor, R.E, shelfItems());
+  $("#scene-bg").innerHTML = Art.sceneBg(sh.loc, sh.decor, R.E, shelfItems(), cityProg(sh));
   $("#counter").innerHTML = Art.counter(sh.loc);
   $("#customers").innerHTML = "";
   for (const c of R.customers) if (c.el) $("#customers").appendChild(c.el);
@@ -2004,7 +2018,7 @@ const PANELS = {
         const why = reason || (!canAfford(s0.cost) ? `Cần ${money(s0.cost)} (két còn ${money(S.money)}).` : R.phase !== "prepare" ? "Chỉ mở chi nhánh vào đầu ngày." : "");
         side = `<div class="card"><h3 style="margin:0">📍 ${s0.city} — ${s0.name}</h3><div class="sub">${s0.desc}</div>
           <div class="row" style="margin-top:6px"><span class="pill">💰 Giá mở: ${money(s0.cost)}</span><span class="pill">🏠 Thuê ${money(s0.rent)}/ngày</span><span class="pill">👥 Khách ×${s0.flow}</span></div>
-          <div class="sub" style="margin-top:4px">⭐ Đặc sản bán giá cao: ${DRINKS[s0.specialty].name}<br>🏙️ Món chỉ có ở đây: ${local}<br>💞 Khách ruột mới: ${regs}<br>📜 Câu chuyện riêng: ${CITY_STORIES[sel].icon} “${CITY_STORIES[sel].title}”</div>
+          <div class="sub" style="margin-top:4px">⭐ Đặc sản bán giá cao: ${DRINKS[s0.specialty].name}<br>🏙️ Món chỉ có ở đây: ${local}<br>💞 Khách ruột mới: ${regs}<br>📜 Câu chuyện riêng: ${CITY_STORIES[sel].icon} “${CITY_STORIES[sel].title}” — ${CITY_STORIES[sel].theme || "4 tiếng câu chuyện riêng của quán"}</div>
           <div class="row" style="margin-top:10px"><button class="btn big teal" id="c-open" ${why ? "disabled" : ""}>🏗️ Mở chi nhánh</button></div>
           ${why ? `<div class="pill red" style="margin-top:6px">${why}</div>` : ""}</div>`;
       }
@@ -2382,7 +2396,7 @@ function bindUI() {
 }
 
 // Hook kiểm thử: chỉ bật khi URL có ?debug
-if (location.search.includes("debug")) window.__dbg = { get S() { return S; }, R, Music, prepareDay, showPrepare, checkChapter, startQte, spawnCustomer, PANELS, giveItem,
+if (location.search.includes("debug")) window.__dbg = { get S() { return S; }, R, Music, prepareDay, showPrepare, checkChapter, buildScene, newShop, cityNextText, startQte, spawnCustomer, PANELS, giveItem,
   clear() { R.customers.slice().forEach(c => removeCustomer(c)); closeDialog(); },
   spawnMulti(n) { for (let k = 0; k < 30; k++) { spawnCustomer(); const c = R.customers[R.customers.length - 1]; if (c && c.items.length >= n) return; if (c) removeCustomer(c); } },
   spawnReg(id) { const ch = CHARACTERS.find(c => c.id === id); const s0 = freeSlot(); if (s0 < 0) return; if (!S.chars[id]) S.chars[id] = { aff: 0, met: true, chatIdx: 0, story: 0, visits: 0 };

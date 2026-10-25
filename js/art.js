@@ -232,33 +232,122 @@ const Art = (() => {
     return "";
   }
 
-  function sceneBg(locId, decor, extra = 0, shelf = []) {
-    const L = LOCATIONS[locId];
-    const wall = L.wall, acc = L.accent;
+  // ---- Phong cách riêng từng chi nhánh ----
+  const THEMES = {
+    hanoi:  { wall: "#f3d9a4", floor: ["#c49a6c", "#b0855a"], floorType: "plank", trim: "#5c3d2e", win: "lattice", counter: ["#5c3d2e", "#7f5539", "#6f4e37"] },
+    saigon: { wall: "#cdeee6", floor: ["#f1faee", "#e76f51"], floorType: "gachbong", trim: "#264653", win: "grille", counter: ["#2a9d8f", "#264653", "#e9f5f2"] },
+    dalat:  { wall: "#b07d55", floor: ["#7f5539", "#6b4630"], floorType: "plank", trim: "#4a2f1f", win: "cross", counter: ["#6b4630", "#8b5e3c", "#a47551"] },
+    hoian:  { wall: "#ffd166", floor: ["#e07a5f", "#c8634a"], floorType: "terracotta", trim: "#3a5a40", win: "arch", counter: ["#3a5a40", "#588157", "#e9c46a"] },
+    danang: { wall: "#ffffff", floor: ["#f6e7c8", "#efd9ad"], floorType: "sand", trim: "#1d8fd8", win: "panorama", counter: ["#1d8fd8", "#ffffff", "#90e0ef"] },
+    hue:    { wall: "#e6dcf2", floor: ["#b8b8aa", "#a3a394"], floorType: "stone", trim: "#6b2d2d", win: "moon", counter: ["#6b2d2d", "#8c3b3b", "#c9a227"] },
+  };
+  // Hình cửa sổ: vùng cắt cảnh nhìn ra ngoài và khung
+  function windowShape(t) {
+    switch (t.win) {
+      case "panorama": return { clip: `<rect x="230" y="66" width="360" height="190" rx="14"/>`, box: [230, 66, 360, 190],
+        frame: `<rect x="230" y="66" width="360" height="190" rx="14" fill="none" stroke="#fff" stroke-width="12"/><rect x="230" y="66" width="360" height="190" rx="14" fill="none" stroke="${t.trim}" stroke-width="3"/>` };
+      case "moon": return { clip: `<circle cx="440" cy="160" r="98"/>`, box: [342, 62, 196, 196],
+        frame: `<circle cx="440" cy="160" r="98" fill="none" stroke="${t.trim}" stroke-width="12"/><circle cx="440" cy="160" r="108" fill="none" stroke="#c9a227" stroke-width="3"/>` };
+      case "arch": return { clip: `<path d="M300,250 V140 Q300,70 440,70 Q580,70 580,140 V250Z"/>`, box: [300, 70, 280, 180],
+        frame: `<path d="M300,250 V140 Q300,70 440,70 Q580,70 580,140 V250Z" fill="none" stroke="${t.trim}" stroke-width="10"/>
+          <rect x="250" y="110" width="46" height="140" rx="4" fill="#52796f"/>${[0,1,2,3,4,5].map(i => `<rect x="256" y="${118 + i * 21}" width="34" height="5" fill="#354f52"/>`).join("")}
+          <rect x="584" y="110" width="46" height="140" rx="4" fill="#52796f"/>${[0,1,2,3,4,5].map(i => `<rect x="590" y="${118 + i * 21}" width="34" height="5" fill="#354f52"/>`).join("")}` };
+      default: {
+        let extra = "";
+        if (t.win === "lattice") extra = [1,2,3,4,5,6].map(i => `<line x1="${300 + i * 40}" y1="70" x2="${300 + i * 40}" y2="250" stroke="${t.trim}" stroke-width="2" opacity=".5"/>`).join("") + [1,2,3].map(i => `<line x1="300" y1="${70 + i * 45}" x2="580" y2="${70 + i * 45}" stroke="${t.trim}" stroke-width="2" opacity=".5"/>`).join("");
+        if (t.win === "grille") extra = Array.from({ length: 13 }, (_, i) => `<line x1="${310 + i * 21}" y1="70" x2="${310 + i * 21}" y2="250" stroke="#2b2d42" stroke-width="2.5"/>`).join("") + `<path d="M300,110 Q440,80 580,110" stroke="#2b2d42" stroke-width="3" fill="none"/>`;
+        if (t.win === "cross") extra = `<line x1="440" y1="70" x2="440" y2="250" stroke="#fff" stroke-width="7"/><line x1="300" y1="160" x2="580" y2="160" stroke="#fff" stroke-width="7"/><rect x="300" y="70" width="280" height="180" fill="#fff" opacity=".18"/>`;
+        return { clip: `<rect x="300" y="70" width="280" height="180" rx="10"/>`, box: [300, 70, 280, 180],
+          frame: `${extra}<rect x="300" y="70" width="280" height="180" rx="10" fill="none" stroke="${t.win === "cross" ? "#fff" : t.trim}" stroke-width="10"/>` };
+      }
+    }
+  }
+  // Mảng tường và sàn
+  function wallSvg(locId, t, H) {
+    const w = t.wall;
+    let g = `<rect width="1000" height="${H}" fill="${w}"/>`;
+    if (locId === "hanoi") g += `<rect y="${H - 370}" width="1000" height="100" fill="#6f4e37"/>${Array.from({ length: 25 }, (_, i) => `<rect x="${i * 40}" y="${H - 370}" width="3" height="100" fill="#5c3d2e"/>`).join("")}
+      ${[0, 292, 592, 994].map(x => `<rect x="${x}" y="0" width="8" height="${H - 270}" fill="#5c3d2e"/>`).join("")}<rect y="${H - 560}" width="1000" height="10" fill="#5c3d2e" opacity=".8"/>
+      ${[[120, 40], [700, 90], [880, 30]].map(([x, y]) => `<path d="M${x},${y + H - 570} l14,10 l-6,12 l10,8" stroke="#d9b77c" stroke-width="2" fill="none"/>`).join("")}`;
+    if (locId === "saigon") g += `<rect y="${H - 370}" width="1000" height="100" fill="#f1faee"/>${Array.from({ length: 25 }, (_, i) => `<g transform="translate(${i * 40} ${H - 370})"><rect width="40" height="50" fill="#f1faee" stroke="#a8dadc"/><circle cx="20" cy="25" r="10" fill="#e76f51" opacity=".7"/><circle cx="20" cy="25" r="4" fill="#264653"/><rect y="50" width="40" height="50" fill="#a8dadc" opacity=".5" stroke="#a8dadc"/></g>`).join("")}`;
+    if (locId === "dalat") g += Array.from({ length: Math.ceil(H / 26) }, (_, i) => `<rect y="${i * 26}" width="1000" height="24" rx="12" fill="${i % 2 ? "#a47551" : "#b07d55"}"/><circle cx="${(i * 137) % 1000}" cy="${i * 26 + 12}" r="5" fill="#8b5e3c"/>`).join("");
+    if (locId === "hoian") g += [[80, 60, 70], [520, 30, 90], [760, 120, 60], [300, 230, 50], [900, 200, 80]].map(([x, y, r]) => `<ellipse cx="${x}" cy="${y + H - 570}" rx="${r}" ry="${r * 0.6}" fill="#f4b942" opacity=".45"/>`).join("") + `<rect y="${H - 290}" width="1000" height="20" fill="#e9a23b" opacity=".6"/>`;
+    if (locId === "danang") g += Array.from({ length: 34 }, (_, i) => i % 2 ? `<rect x="${i * 30}" width="30" height="${H - 270}" fill="#d6f0ff"/>` : "").join("");
+    if (locId === "hue") g += `<rect width="1000" height="${H - 530}" fill="#6b2d2d"/>${Array.from({ length: 20 }, (_, i) => `<circle cx="${25 + i * 50}" cy="${H - 552}" r="7" fill="#c9a227" opacity=".7"/>`).join("")}`;
+    return g;
+  }
+  function floorSvg(t, y) {
+    const [a, b] = t.floor;
+    let g = `<rect y="${y}" width="1000" height="300" fill="${a}"/>`;
+    if (t.floorType === "plank") g += Array.from({ length: 12 }, (_, i) => `<rect y="${y + i * 24}" width="1000" height="2" fill="${b}"/>${Array.from({ length: 6 }, (_, k) => `<rect x="${((k * 190 + i * 70) % 1000)}" y="${y + i * 24}" width="2" height="24" fill="${b}"/>`).join("")}`).join("");
+    if (t.floorType === "gachbong") g += Array.from({ length: 8 * 25 }, (_, n) => { const i = n % 25, j = Math.floor(n / 25); return `<g transform="translate(${i * 40} ${y + j * 40})"><rect width="40" height="40" fill="${(i + j) % 2 ? a : "#fde2d1"}" stroke="#e5d0c3"/><path d="M20,4 L36,20 L20,36 L4,20Z" fill="${b}" opacity=".55"/><circle cx="20" cy="20" r="5" fill="#264653" opacity=".7"/></g>`; }).join("");
+    if (t.floorType === "terracotta") g += Array.from({ length: 8 * 20 }, (_, n) => { const i = n % 20, j = Math.floor(n / 20); return `<rect x="${i * 50 + 1}" y="${y + j * 50 + 1}" width="48" height="48" fill="${(i + j) % 2 ? a : b}"/>`; }).join("");
+    if (t.floorType === "sand") g += Array.from({ length: 140 }, (_, n) => `<circle cx="${(n * 97) % 1000}" cy="${y + (n * 53) % 280}" r="1.6" fill="${b}"/>`).join("") + Array.from({ length: 8 }, (_, j) => `<rect y="${y + j * 40}" width="1000" height="2" fill="${b}"/>`).join("");
+    if (t.floorType === "stone") g += Array.from({ length: 8 * 14 }, (_, n) => { const i = n % 14, j = Math.floor(n / 14); return `<rect x="${i * 74 + (j % 2) * 37 - 37}" y="${y + j * 36 + 1}" width="72" height="34" rx="4" fill="${(i + j) % 3 ? a : b}"/>`; }).join("");
+    return g;
+  }
+  // Đồ trang trí đặc trưng, đổi dần theo tiến triển câu chuyện của quán (p = số cảnh đã xem)
+  function propsSvg(locId, t, p) {
+    let g = "";
+    if (locId === "hanoi") {
+      g += `<g class="lantern"><line x1="285" y1="0" x2="285" y2="40" stroke="#333"/><rect x="275" y="40" width="20" height="8" fill="#c9a227"/>${[0,1,2,3].map(i => `<line x1="${277 + i * 5}" y1="48" x2="${277 + i * 5}" y2="${74 + (i % 2) * 8}" stroke="#adb5bd" stroke-width="2"/>`).join("")}<circle cx="285" cy="88" r="4" fill="#e63946"/></g>`;
+      if (p >= 1) g += `<g transform="translate(206 210)"><line x1="0" y1="0" x2="80" y2="-10" stroke="#9c6644" stroke-width="4"/><path d="M-6,4 h26 l-4,26 h-18z" fill="#c9a227"/><path d="M60,-6 h26 l-4,26 h-18z" fill="#c9a227"/><ellipse cx="7" cy="4" rx="13" ry="5" fill="#fff8e7"/><ellipse cx="73" cy="-6" rx="13" ry="5" fill="#fff8e7"/></g>`;
+    }
+    if (locId === "saigon") {
+      g += [[230, 0], [600, 0], [960, 0]].map(([x]) => `<g><line x1="${x}" y1="0" x2="${x}" y2="20" stroke="#555"/><path d="M${x - 16},20 h32 l-6,18 h-20z" fill="#e76f51"/>${[0,1,2,3].map(k => `<path d="M${x - 10 + k * 7},36 q${k % 2 ? 6 : -6},20 0,${34 + k * 6}" stroke="#40916c" stroke-width="3" fill="none"/>`).join("")}</g>`).join("");
+      if (p >= 4) g += `<g transform="translate(214 120)"><rect width="80" height="88" rx="6" fill="#c8a27a" stroke="#7f5539" stroke-width="4"/>${[[8,8,"#ffd166"],[40,14,"#ffafcc"],[12,44,"#a8dadc"],[44,50,"#fff"]].map(([x,y,c]) => `<rect x="${x}" y="${y}" width="28" height="24" fill="${c}" transform="rotate(${x % 9 - 4} ${x} ${y})"/>`).join("")}<text x="40" y="104" text-anchor="middle" font-size="10" font-weight="700" fill="#264653">Góc trút buồn</text></g>`;
+      if (p >= 8) g += `<path d="M0,6 Q500,46 1000,6" stroke="#333" fill="none"/>${Array.from({ length: 16 }, (_, i) => `<circle cx="${30 + i * 62}" cy="${12 + Math.sin(i / 15 * Math.PI) * 22}" r="7" fill="#ffd166" class="bulb" style="animation-delay:${i * 0.2}s"/>`).join("")}`;
+    }
+    if (locId === "dalat") {
+      g += `<g transform="translate(520 236)"><path d="M0,0 h26 l-4,20 h-18z" fill="#f4f1de"/>${[[-6,-18],[6,-26],[18,-16],[10,-8],[0,-30],[24,-26]].map(([x,y]) => `<circle cx="${x + 8}" cy="${y}" r="7" fill="#ffd60a"/><circle cx="${x + 8}" cy="${y}" r="2.5" fill="#bc6c25"/>`).join("")}</g>`;
+      g += `<path d="M300,64 Q440,84 580,64" stroke="#e76f51" stroke-width="3" fill="none"/>${[0,1,2,3,4,5,6].map(i => `<path d="M${310 + i * 40},${68 + Math.sin(i / 6 * Math.PI) * 9} l8,14 l8,-14z" fill="${["#e76f51","#f4a261","#e9c46a","#2a9d8f"][i % 4]}"/>`).join("")}`;
+      if (p >= 2) g += [230, 250, 270].map((x, i) => `<g><line x1="${x}" y1="20" x2="${x}" y2="${60 + i * 6}" stroke="#7f5539"/><path d="M${x - 8},${60 + i * 6} l8,26 l8,-26z" fill="${["#74c69d","#b5838d","#e9c46a"][i]}"/></g>`).join("");
+      if (p >= 6) g += `<g transform="translate(212 140)">${[[0,0],[34,8],[6,40],[40,46]].map(([x,y],k) => `<rect x="${x}" y="${y}" width="34" height="26" fill="#fffaf0" stroke="#c9a227" transform="rotate(${k % 2 ? 6 : -5} ${x} ${y})"/><path d="M${x},${y} l17,12 l17,-12" stroke="#c9a227" fill="none" transform="rotate(${k % 2 ? 6 : -5} ${x} ${y})"/>`).join("")}</g>`;
+    }
+    if (locId === "hoian") {
+      g += Array.from({ length: 26 }, (_, i) => `<circle cx="${i * 40 + (i % 3) * 7}" cy="${8 + (i % 4) * 7}" r="${10 + (i % 3) * 3}" fill="${i % 3 ? "#ff5d8f" : "#ff8fab"}"/>`).join("") + Array.from({ length: 12 }, (_, i) => `<circle cx="${i * 85 + 20}" cy="${22 + (i % 2) * 6}" r="5" fill="#52b788"/>`).join("");
+      const lanterns = p >= 2 ? [[230, "#e63946"], [600, "#f77f00"], [880, "#fcbf49"], [140, "#06d6a0"], [960, "#e63946"]] : [[230, "#e63946"], [880, "#fcbf49"]];
+      g += lanterns.map(([x, c], i) => `<g class="lantern" style="animation-delay:${i * .4}s"><line x1="${x}" y1="30" x2="${x}" y2="50" stroke="#333"/><ellipse cx="${x}" cy="68" rx="15" ry="19" fill="${c}"/><rect x="${x - 7}" y="48" width="14" height="4" fill="#c9a227"/><rect x="${x - 7}" y="85" width="14" height="4" fill="#c9a227"/><ellipse cx="${x}" cy="68" rx="24" ry="26" fill="${c}" opacity=".18"/></g>`).join("");
+      if (p >= 6) g += `<g transform="translate(212 180)"><path d="M0,30 l40,-10 l40,10 v8 l-40,-8 l-40,8z" fill="#9c6644"/><rect x="6" y="6" width="34" height="26" fill="#fffaf0" transform="skewY(-8)"/><rect x="40" y="0" width="34" height="26" fill="#fffaf0" transform="skewY(8)"/></g>`;
+    }
+    if (locId === "danang") {
+      g += `<path d="M230,58 Q410,80 590,58" stroke="#c9a227" stroke-width="2" fill="none"/>${Array.from({ length: 9 }, (_, i) => `<path d="M${245 + i * 40},${64 + Math.sin(i / 8 * Math.PI) * 9} q8,-10 16,0 q-8,14 -16,0z" fill="${i % 2 ? "#ffd6e0" : "#fff1e6"}" stroke="#e9c46a"/>`).join("")}`;
+      g += `<g transform="translate(196 110) rotate(-6)"><ellipse cx="14" cy="80" rx="15" ry="86" fill="#ff7b54"/><ellipse cx="14" cy="80" rx="15" ry="86" fill="none" stroke="#fff" stroke-width="3"/><line x1="14" y1="0" x2="14" y2="160" stroke="#fff" stroke-width="3"/></g>`;
+      if (p >= 4) g += `<g transform="translate(600 210)">${[0,1,2].map(i => `<ellipse cx="${20 + i * 26}" cy="${50 - (i % 2) * 8}" rx="16" ry="10" fill="#d4a373"/>`).join("")}</g>`;
+      if (p >= 6) g += `<g transform="translate(560 20)"><circle r="22" fill="none" stroke="#e63946" stroke-width="12"/><circle r="22" fill="none" stroke="#fff" stroke-width="12" stroke-dasharray="17 17"/></g>`;
+    }
+    if (locId === "hue") {
+      g += [214, 586].map(x => `<rect x="${x}" y="0" width="22" height="270" fill="#6b2d2d"/><rect x="${x - 5}" y="262" width="32" height="18" rx="3" fill="#a3a394"/><rect x="${x}" y="40" width="22" height="6" fill="#c9a227"/>`).join("");
+      g += `<g transform="translate(250 236)"><path d="M0,0 h44 l-6,40 h-32z" fill="#3d5a80"/><path d="M8,0 q14,-34 28,0" fill="#74c69d"/><circle cx="22" cy="-16" r="8" fill="#ffafcc"/></g>`;
+      if (p >= 4) g += `<g transform="translate(606 214)"><rect width="56" height="34" rx="4" fill="#8c3b3b"/><circle cx="24" cy="10" r="16" fill="#1b1b1b"/><circle cx="24" cy="10" r="4" fill="#c9a227"/><path d="M44,0 q20,-30 6,-50 q30,6 22,30z" fill="#c9a227"/></g>`;
+    }
+    return g;
+  }
+  function sceneBg(locId, decor, extra = 0, shelf = [], prog = 0) {
+    const L = LOCATIONS[locId], t = THEMES[locId] || THEMES.hanoi;
+    const acc = L.accent, H = 570 + extra;
     const plant = decor.cay_xanh ? `
       <g><rect x="40" y="250" width="44" height="40" rx="6" fill="#e07a5f"/><circle cx="62" cy="230" r="28" fill="#52b788"/><circle cx="44" cy="222" r="16" fill="#40916c"/><circle cx="80" cy="218" r="16" fill="#74c69d"/></g>
       <g><rect x="920" y="250" width="44" height="40" rx="6" fill="#f4a261"/><circle cx="942" cy="234" r="22" fill="#52b788"/><circle cx="930" cy="214" r="6" fill="#ff8fa3"/><circle cx="952" cy="208" r="6" fill="#ffd166"/></g>` : "";
     const neon = decor.bien_neon ? `<text x="500" y="44" text-anchor="middle" class="neon" font-size="30" font-family="Baloo 2, cursive" font-weight="800" fill="#fff" stroke="${acc}" stroke-width="1.5">☕ Cửa hàng nhỏ của Uyên</text>` :
       `<rect x="370" y="14" width="260" height="40" rx="10" fill="#fff8e7" stroke="${acc}" stroke-width="3"/><text x="500" y="42" text-anchor="middle" font-size="22" font-family="Baloo 2, cursive" font-weight="800" fill="${acc}">Cửa hàng nhỏ của Uyên</text>`;
-    // Tranh tường (trang trí) treo bên trái cửa sổ; góc phải dành cho TV
-    const art = decor.tranh ? `<g><rect x="196" y="140" width="92" height="74" rx="6" fill="#fff" stroke="#9c6644" stroke-width="5"/><circle cx="224" cy="166" r="12" fill="#ffd166"/><path d="M204,206 l24,-24 l16,16 l16,-20 l20,28z" fill="${acc}"/></g>` : "";
-    const ac = decor.may_lanh ? `<g><rect x="80" y="70" width="110" height="34" rx="8" fill="#f8f9fa" stroke="#adb5bd" stroke-width="2"/><rect x="92" y="94" width="86" height="4" fill="#ced4da"/><circle cx="178" cy="80" r="3" fill="#06d6a0"/></g>` : "";
-    const speaker = decor.loa_jazz ? `<g><rect x="230" y="150" width="40" height="60" rx="6" fill="#343a40"/><circle cx="250" cy="170" r="10" fill="#6c757d"/><circle cx="250" cy="196" r="6" fill="#6c757d"/><text x="282" y="160" font-size="20" class="note">♪</text></g>` : "";
+    // Tranh tường treo dưới TV, loa jazz ở góc phải, máy lạnh trên cao — tránh kệ và cửa sổ
+    const art = decor.tranh ? `<g><rect x="800" y="150" width="84" height="64" rx="6" fill="#fff" stroke="#9c6644" stroke-width="5"/><circle cx="824" cy="172" r="10" fill="#ffd166"/><path d="M806,208 l22,-22 l14,14 l14,-18 l20,26z" fill="${acc}"/></g>` : "";
+    const ac = decor.may_lanh ? `<g><rect x="650" y="-14" width="110" height="30" rx="8" fill="#f8f9fa" stroke="#adb5bd" stroke-width="2"/><rect x="662" y="6" width="86" height="4" fill="#ced4da"/><circle cx="748" cy="-4" r="3" fill="#06d6a0"/></g>` : "";
+    const speaker = decor.loa_jazz ? `<g><rect x="900" y="150" width="40" height="60" rx="6" fill="#343a40"/><circle cx="920" cy="170" r="10" fill="#6c757d"/><circle cx="920" cy="196" r="6" fill="#6c757d"/><text x="944" y="150" font-size="20" class="note">♪</text></g>` : "";
     const menu = `<g><rect x="600" y="76" width="150" height="120" rx="8" fill="#2d3a3a" stroke="#9c6644" stroke-width="6"/><text x="675" y="100" text-anchor="middle" fill="#ffd166" font-size="16" font-family="Baloo 2" font-weight="700">THỰC ĐƠN</text>${[0,1,2,3,4].map(i => `<rect x="616" y="${112 + i * 15}" width="${60 + (i * 23) % 50}" height="5" rx="2" fill="#fff" opacity=".7"/><rect x="718" y="${112 + i * 15}" width="18" height="5" rx="2" fill="#ffd166" opacity=".8"/>`).join("")}</g>`;
-    return `<svg class="scene-bg" viewBox="0 0 1000 ${570 + extra}" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
-      <defs><clipPath id="win-clip"><rect x="300" y="70" width="280" height="180" rx="10"/></clipPath>
-        <pattern id="tiles" width="40" height="40" patternUnits="userSpaceOnUse"><rect width="40" height="40" fill="#f2e2c4"/><rect width="20" height="20" fill="#e8d3ad"/><rect x="20" y="20" width="20" height="20" fill="#e8d3ad"/></pattern>
-        <pattern id="stripes" width="30" height="30" patternUnits="userSpaceOnUse"><rect width="30" height="30" fill="${wall}"/><rect width="15" height="30" fill="#fff" opacity=".18"/></pattern></defs>
-      <rect width="1000" height="${570 + extra}" fill="url(#stripes)"/>
-      <rect y="${300 + extra}" width="1000" height="270" fill="url(#tiles)"/>
-      <rect y="${294 + extra}" width="1000" height="10" fill="${acc}" opacity=".6"/>
+    const W = windowShape(t), [bx, by, bw, bh] = W.box;
+    return `<svg class="scene-bg" viewBox="0 0 1000 ${H}" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <defs><clipPath id="win-clip">${W.clip}</clipPath></defs>
+      ${wallSvg(locId, t, H)}
+      ${floorSvg(t, 300 + extra)}
+      <rect y="${294 + extra}" width="1000" height="10" fill="${t.trim}" opacity=".7"/>
       ${extra > 40 ? bunting(extra, acc) : ""}
       <g transform="translate(0 ${20 + extra})">
       ${neon}
-      <g clip-path="url(#win-clip)"><g transform="translate(300 70) scale(0.934 0.9)">${windowView(locId)}</g></g>
-      <rect x="300" y="70" width="280" height="180" rx="10" fill="none" stroke="#9c6644" stroke-width="10"/>
-      <line x1="440" y1="70" x2="440" y2="250" stroke="#9c6644" stroke-width="6"/>
-      <path d="M290,70 Q310,110 300,150 L290,150Z" fill="${acc}" opacity=".85"/><path d="M590,70 Q570,110 580,150 L590,150Z" fill="${acc}" opacity=".85"/>
+      <g clip-path="url(#win-clip)"><g transform="translate(${bx} ${by}) scale(${(bw / 300).toFixed(3)} ${(bh / 200).toFixed(3)})">${windowView(locId)}</g></g>
+      ${W.frame}
+      ${propsSvg(locId, t, prog)}
       ${menu}${art}${ac}${speaker}
       ${shelfSvg(shelf)}
       <g class="lamp"><line x1="250" y1="-400" x2="250" y2="50" stroke="#333" stroke-width="2"/><path d="M230,50 h40 l10,22 h-60z" fill="#ffd166"/><ellipse cx="250" cy="74" rx="40" ry="8" fill="#fff3b0" opacity=".5"/></g>
@@ -267,7 +356,22 @@ const Art = (() => {
       </g>
     </svg>`;
   }
-
+  function counter(locId) {
+    const acc = LOCATIONS[locId].accent, [top, front, panel] = (THEMES[locId] || THEMES.hanoi).counter;
+    const deco = locId === "saigon" ? Array.from({ length: 25 }, (_, i) => `<rect x="${i * 40 + 4}" y="30" width="32" height="32" fill="${panel}" stroke="#a8dadc"/><circle cx="${i * 40 + 20}" cy="46" r="7" fill="#e76f51" opacity=".7"/>`).join("")
+      : locId === "dalat" ? Array.from({ length: 4 }, (_, j) => `<rect x="0" y="${26 + j * 24}" width="1000" height="22" rx="11" fill="${j % 2 ? front : panel}"/>`).join("")
+      : locId === "danang" ? Array.from({ length: 20 }, (_, i) => `<rect x="${i * 50}" y="26" width="25" height="94" fill="${panel}" opacity=".6"/>`).join("")
+      : locId === "hue" ? Array.from({ length: 13 }, (_, i) => `<rect x="${i * 80 + 8}" y="30" width="64" height="76" rx="4" fill="none" stroke="${panel}" stroke-width="3"/><circle cx="${i * 80 + 40}" cy="68" r="10" fill="none" stroke="${panel}" stroke-width="2"/>`).join("")
+      : Array.from({ length: 13 }, (_, i) => `<rect x="${i * 80 + 6}" y="26" width="68" height="84" rx="6" fill="${panel}" opacity=".45"/>`).join("");
+    return `<svg class="counter-svg" viewBox="0 0 1000 120" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="0" width="1000" height="18" rx="6" fill="${top}"/>
+      <rect x="0" y="16" width="1000" height="104" fill="${front}"/>
+      ${deco}
+      <rect x="0" y="16" width="1000" height="10" fill="${acc}" opacity=".7"/>
+      <g transform="translate(860 -46)"><rect width="80" height="48" rx="8" fill="#495057"/><rect x="8" y="8" width="64" height="20" rx="4" fill="#80ed99"/><rect x="10" y="34" width="60" height="8" rx="3" fill="#adb5bd"/></g>
+      <g transform="translate(60 -40)"><rect width="22" height="40" rx="6" fill="#adb5bd"/><rect x="28" y="10" width="22" height="30" rx="6" fill="#ced4da"/><rect x="56" y="4" width="30" height="36" rx="8" fill="#ffe8d6"/></g>
+    </svg>`;
+  }
   // Kệ tường: sách trang trí, hoặc kỷ vật khách ruột tặng (tối đa 2 tầng × 6 món)
   function shelfSvg(items) {
     const plank = y => `<rect x="40" y="${y}" width="170" height="10" rx="3" fill="#9c6644"/><rect x="48" y="${y + 10}" width="6" height="10" fill="#7f5539"/><rect x="196" y="${y + 10}" width="6" height="10" fill="#7f5539"/>`;
@@ -288,17 +392,7 @@ const Art = (() => {
     return g;
   }
 
-  function counter(locId) {
-    const acc = LOCATIONS[locId].accent;
-    return `<svg class="counter-svg" viewBox="0 0 1000 120" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">
-      <rect x="0" y="0" width="1000" height="18" rx="6" fill="#7f5539"/>
-      <rect x="0" y="16" width="1000" height="104" fill="#b08968"/>
-      ${Array.from({length: 13}, (_, i) => `<rect x="${i * 80 + 6}" y="26" width="68" height="84" rx="6" fill="#9c6644" opacity=".45"/>`).join("")}
-      <rect x="0" y="16" width="1000" height="10" fill="${acc}" opacity=".7"/>
-      <g transform="translate(860 -46)"><rect width="80" height="48" rx="8" fill="#495057"/><rect x="8" y="8" width="64" height="20" rx="4" fill="#80ed99"/><rect x="10" y="34" width="60" height="8" rx="3" fill="#adb5bd"/></g>
-      <g transform="translate(60 -40)"><rect width="22" height="40" rx="6" fill="#adb5bd"/><rect x="28" y="10" width="22" height="30" rx="6" fill="#ced4da"/><rect x="56" y="4" width="30" height="36" rx="8" fill="#ffe8d6"/></g>
-    </svg>`;
-  }
+
 
   function drinkIcon(id) {
     const d = DRINKS[id];
