@@ -131,12 +131,23 @@ function loadData(data) {
 // ---------- Co giãn khung ngang ----------
 const PHONE_STATION = 400, PHONE_DOCK = 96;
 const isPhone = () => document.body.classList.contains("phone");
+// Chiều xoay khi cầm máy dọc (lưu riêng trên từng thiết bị)
+const rotDir = () => { try { return localStorage.getItem("chnu_rot") || "right"; } catch (e) { return "right"; } };
 function fit() {
-  const vp = $("#viewport"), cs = getComputedStyle(vp);
+  const vp = $("#viewport");
+  // Cầm máy dọc trên thiết bị cảm ứng: xoay cả game 90° để luôn hiện ngang (chơi được khi nằm, khóa xoay màn hình)
+  const rotated = innerHeight > innerWidth && matchMedia("(pointer: coarse)").matches;
+  const left = rotated && rotDir() === "left";
+  document.body.classList.toggle("rotated", rotated);
+  document.body.classList.toggle("rot-left", left);
+  const vw = rotated ? innerHeight : innerWidth, vh = rotated ? innerWidth : innerHeight;
+  vp.style.width = rotated ? vw + "px" : ""; vp.style.height = rotated ? vh + "px" : "";
+  vp.style.transform = !rotated ? "" : left ? `translateY(${innerHeight}px) rotate(-90deg)` : `translateX(${innerWidth}px) rotate(90deg)`;
+  const cs = getComputedStyle(vp);
   const pl = parseFloat(cs.paddingLeft) || 0, pr = parseFloat(cs.paddingRight) || 0, pt = parseFloat(cs.paddingTop) || 0, pb = parseFloat(cs.paddingBottom) || 0;
-  const w = innerWidth - pl - pr, h = innerHeight - pt - pb;
+  const w = vw - pl - pr, h = vh - pt - pb;
   // Điện thoại nằm ngang: khung thấp hơn (600) để chữ to, rộng theo tỷ lệ màn hình để phủ kín
-  const phone = Math.min(innerWidth, innerHeight) < 520 && innerWidth > innerHeight;
+  const phone = Math.min(vw, vh) < 520;
   document.body.classList.toggle("phone", phone);
   let W = 1600, H;
   if (phone) { H = 600; W = Math.round(clamp(H * w / h, 1000, 1500)); }
@@ -346,7 +357,7 @@ function openDay() {
 let lastFrame = performance.now();
 function frame(now) {
   const dt = Math.min(120, now - lastFrame); lastFrame = now;
-  if (R.phase === "open" && !R.paused && $("#modal").classList.contains("hidden") && !R.dialog) {
+  if (R.phase === "open" && !R.paused && $("#modal").classList.contains("hidden") && !R.dialog && !Guide.steps) {
     R.acc += dt * R.speed;
     while (R.acc >= MS_PER_MIN) { R.acc -= MS_PER_MIN; tickMinute(); if (R.phase !== "open") break; }
     if (R.qte) qteTick(dt);
@@ -361,13 +372,15 @@ function lambda(i, t) {
   let curve = 0.45 + 1.0 * gauss(h, 8, 1) + 0.7 * gauss(h, 12.5, 0.8) + 0.9 * gauss(h, 18, 1.2);
   if (R.event && R.event.evening && h >= 18) curve *= R.event.evening;
   const weekend = (S.day - 1) % 7 >= 5 ? 1.25 : 1;
-  let mk = 1;
-  for (const m of S.marketing) if (m.scope === "all" || i === S.active) mk += m.boost;
+  const ads = adsFor(i);
+  const mk = ads.length ? Math.max(...ads.map(m => MARKETING[m.id].lvl)) + 0.05 * (ads.length - 1) : AD_BASE;
   const d = sh.decor;
   const ac = d.may_lanh ? (R.weatherBy[sh.loc] === "nong" ? 1.25 : 1.1) : 1;
   const rival = S.story.rival && !S.story.stormDone && i === 0 ? (S.story.rival.choice === "theo" ? 0.9 : 0.7) : 1;
   return 0.06 * rival * (1 + perkOf(sh.loc, "flow")) * (R.seasonBoost || 1) * (sh.decor.san_vuon ? 1.08 : 1) * (1 + shopEff(sh, "flow")) * curve * L.flow * (0.6 + sh.rep / 100 * 0.9) * W.flow * ((R.event && R.event.flow) || 1) * weekend * mk * (1 + S.flowBonus) * (d.bien_neon ? 1.15 : 1) * ac;
 }
+// Chiến dịch đang có tác dụng ở quán i (tờ rơi chỉ ở quán đã phát)
+const adsFor = i => S.marketing.filter(m => MARKETING[m.id] && (m.scope === "all" || (m.shop != null ? m.shop : S.active) === i));
 function maxSlots() { return Math.min(6, 3 + (shop().decor.ban_ghe || 0)); }
 
 function tickMinute() {
@@ -378,6 +391,7 @@ function tickMinute() {
   if (R.time < DAY_END) {
     if (rand() < lambda(S.active, R.time)) spawnCustomer();
     if (R.event && R.event.critic && !R.criticDone && R.time > 10 * 60 && rand() < 0.01) spawnCustomer(true);
+    if (S.kolVisit && R.time > 9 * 60 && rand() < 0.02) spawnKol();
     if (R.time > DAY_START + 30 && R.time < DAY_END - 30 && !R.qte) maybeSurprise();
   } else if (!R.closingShown) {
     R.closingShown = true; $("#closed-sign").textContent = "🔒 Đã đóng cửa"; $("#closed-sign").classList.remove("hidden");
@@ -385,6 +399,8 @@ function tickMinute() {
     R.customers.filter(c => c.state === "order").forEach(c => leave(c, "quiet"));
   }
   if (R.waiterBusy > 0) R.waiterBusy--;
+  R.idleMin = R.customers.length ? 0 : (R.idleMin || 0) + 1;
+  if (R.time % 5 === 0) checkHints();
   // Độ sạch: chưa có tạp vụ thì quán bẩn dần theo thời gian; tạp vụ dọn bù theo độ cứng tay
   const cl = present(sh, "cleaner");
   if (R.time < DAY_END) R.clean = clamp(R.clean - (R.customers.length ? 0.15 : 0.05) + (cl ? 1.0 * prof(cl, sh) : 0), 0, 100);
@@ -463,6 +479,34 @@ function freeSlot() {
   return free.length ? pick(free) : -1;
 }
 const slotX = (i, n) => n <= 1 ? 420 : 24 + i * ((1010 - 190) / (n - 1));
+const KOL_LOOK = { g: "f", age: "young", skin: "#fbd9c0", hair: "long", hc: "#f4a3c8", shirt: "tee", sc: "#ffd6e0", acc: ["sunglasses", "earrings"] };
+function spawnKol() {
+  const s0 = freeSlot(); if (s0 < 0) return;
+  S.kolVisit = false;
+  const c = { reg: null, kol: true, name: "KOL Mây Mây", look: KOL_LOOK, drink: pickDrink(S.active), patF: 2 };
+  c.items = [c.drink];
+  Object.assign(c, { idx: 0, uid: ++R.uid, slot: s0, state: "walking", wait: 0, chatted: true, tipBonus: 0.3, maxOrder: 200, maxDrink: 300 });
+  c.pat = c.max = c.maxOrder;
+  mountCustomer(c, "🎥 ");
+  toast("🎥 KOL Mây Mây tới quán rồi! Pha thật chuẩn để lên hình đẹp nhé.", "gold");
+}
+// Sau khi nhận ly, KOL chụp hình rồi đi quanh quán quay phim trước khi về
+function kolFilming(c) {
+  c.state = "filming";
+  const e = c.el; e.classList.add("filming");
+  const b = e.querySelector(".bubble");
+  const flash = () => { const f = el("div", "cam-flash"); $("#floaters").appendChild(f); setTimeout(() => f.remove(), 400); Sound.sfx("click"); };
+  b.innerHTML = `<span class="big">📸</span>`; flash(); setTimeout(flash, 500);
+  speech(custPos(c).x - 20, custPos(c).y - 10, "Lên hình xinh xỉu! Cả nhà ghé quán của Uyên nha!");
+  const stops = [120, 760, 420, 900, 260];
+  stops.forEach((x, k) => setTimeout(() => {
+    if (!e.isConnected) return;
+    b.innerHTML = `<span class="big">${k % 2 ? "🎥" : "🤳"}</span>`;
+    e.classList.add("walking"); e.style.left = x + "px";
+    setTimeout(() => { e.classList.remove("walking"); if (k % 2 === 0) flash(); }, 1300);
+  }, 1500 + k * 1700));
+  setTimeout(() => { const p = custPos(c); floater(p.x, p.y, "🎬 Video lên xu hướng!", "#e07a5f"); shop().rep = clamp(shop().rep + 2, 0, 100); e.classList.remove("filming"); removeCustomer(c); }, 1500 + stops.length * 1700 + 600);
+}
 function spawnCustomer(critic) {
   const s = freeSlot();
   if (s < 0) { R.today.shops[S.active].lost++; return; }
@@ -628,6 +672,7 @@ function openDialog(look, name, text, choices, extra) {
 function closeDialog() { R.dialog = null; $("#dialog").classList.add("hidden"); $("#scene").classList.remove("tamsu"); }
 function dlgName(c) {
   if (c.critic) return `📝 Nhà phê bình <small>Khách đặc biệt</small>`;
+  if (c.kol) return `🎥 KOL Mây Mây <small>Người nổi tiếng trên mạng</small>`;
   if (!c.reg) return `${c.name} <small>Khách vãng lai</small>`;
   const cs = S.chars[c.reg.id];
   return `${c.reg.name} <small>${c.reg.title}</small><span class="hearts">${hearts(cs.aff)}</span>`;
@@ -649,7 +694,7 @@ function showCustomerMenu(c, overrideText) {
   let text;
   if (overrideText) text = overrideText;
   else if (c.state === "order") {
-    const greet = c.critic ? "Chào cô chủ. Tôi muốn thưởng thức món ngon nhất của quán." : pick(c.reg ? c.reg.greet : GEN.greet);
+    const greet = c.critic ? "Chào cô chủ. Tôi muốn thưởng thức món ngon nhất của quán." : c.kol ? "Hello cả nhà! Hôm nay Mây Mây review quán của chị Uyên nè! 📸" : pick(c.reg ? c.reg.greet : GEN.greet);
     if (c.mood) return moodMenu(c, greet);
     const n = c.items ? c.items.length : 1;
     text = greet + " " + (n > 1 ? `Cho mình ${n} ly luôn nhé: ${c.items.map(x => DRINKS[x].name).join(", ")}!` : pick(GEN.order).replace("{d}", d.name));
@@ -1298,7 +1343,8 @@ function resolveServe(c, q, byStaff) {
   if (R.sel === c.uid) R.sel = null;
   if (R.sel == null) { const nt = R.tickets.find(t => !t.barista); R.sel = nt ? nt.id : null; }
   renderTickets(); renderBench(); renderIngredients();
-  setTimeout(() => removeCustomer(c), 1300);
+  if (c.kol && q !== "wrong") setTimeout(() => kolFilming(c), 900);
+  else setTimeout(() => removeCustomer(c), 1300);
   checkGoals(); checkAchv(); renderHud(); renderStats();
   checkBankrupt();
 }
@@ -1548,11 +1594,22 @@ function checkAchv() {
 }
 
 // ---------- Hiển thị ----------
+// Tờ rơi dán ở mặt quầy, bảng mạng xã hội đặt trên quầy
+function renderAds() {
+  const lay = $("#ads-layer"); if (!lay || !S) return;
+  const ads = adsFor(S.active).map(m => m.id);
+  let h = "";
+  if (ads.includes("to_roi")) h += [[140, -5], [470, 4], [800, -3]].map(([x, r], k) => `<div class="flyer" style="left:${x}px;transform:rotate(${r}deg)"><i class="tape"></i>📣<b>Cửa hàng nhỏ của Uyên</b><small>${["Ghé ngay hôm nay!", "Cà phê phin ngon", "Mở cửa 7h–21h"][k]}</small></div>`).join("");
+  if (ads.includes("mxh") || ads.includes("kol")) h += `<div class="social"><div class="phone-frame"><div class="ph-top">#QuánCủaUyên</div><div class="ph-pic">☕</div><div class="ph-likes">❤️ ${ads.includes("kol") ? "58,2k" : "1,2k"}</div></div>${[0, 1, 2].map(k => `<i class="heart" style="animation-delay:${k * 0.7}s">❤️</i>`).join("")}</div>`;
+  if (ads.includes("kol")) h += `<div class="ringlight"><i></i></div>`;
+  lay.innerHTML = h;
+}
 function buildScene() {
   const sh = shop();
   document.documentElement.style.setProperty("--accent", loc(sh).accent);
   $("#scene-bg").innerHTML = Art.sceneBg(sh.loc, sh.decor, R.E, shelfItems(), cityProg(sh));
   $("#counter").innerHTML = Art.counter(sh.loc);
+  renderAds();
   $("#customers").innerHTML = "";
   for (const c of R.customers) if (c.el) $("#customers").appendChild(c.el);
   const sign = $("#closed-sign");
@@ -1669,6 +1726,97 @@ function setPauseUI() {
   else sign.classList.add("hidden");
 }
 
+// ---------- Hướng dẫn từng bước (kiểu màn tập đầu game) ----------
+// Dải chú thích nằm trên mọi bảng; bước có "sel" làm sáng nút cần bấm và chờ người chơi bấm vào
+const Guide = { steps: null, i: 0, id: null, timer: null };
+function startGuide(id, steps, force) {
+  if (!S || !steps || !steps.length) return false;
+  S.seen = S.seen || {};
+  if ((!force && S.seen[id]) || Guide.steps) return false;
+  S.seen[id] = S.day;
+  Object.assign(Guide, { steps, i: 0, id });
+  showGuideStep();
+  return true;
+}
+function showGuideStep() {
+  const st = Guide.steps && Guide.steps[Guide.i];
+  if (!st) return endGuide();
+  const last = Guide.i === Guide.steps.length - 1;
+  const g = $("#guide");
+  g.innerHTML = `<div class="g-face">${Art.person(Art.UYEN, "happy")}</div><div class="g-text">${st.text}${Guide.steps.length > 1 ? `<span class="g-step">${Guide.i + 1}/${Guide.steps.length}</span>` : ""}</div>
+    <button class="g-btn">${st.sel ? "Bỏ qua" : last ? "Đã hiểu ✓" : "Tiếp ▶"}</button>${R.phase === "open" ? `<span class="g-paused">⏸ Game tạm dừng trong lúc hướng dẫn</span>` : ""}`;
+  g.classList.remove("hidden");
+  g.querySelector(".g-btn").onclick = () => { Sound.sfx("click"); if (st.sel || last) endGuide(); else { Guide.i++; showGuideStep(); } };
+  clearInterval(Guide.timer); Guide.timer = setInterval(applyGuideGlow, 250); applyGuideGlow();
+}
+function applyGuideGlow() {
+  const st = Guide.steps && Guide.steps[Guide.i];
+  const t = st && st.sel ? document.querySelector(st.sel) : null;
+  document.querySelectorAll(".guide-glow").forEach(e => { if (e !== t) e.classList.remove("guide-glow"); });
+  // Nút cần bấm nằm khuất trong bảng thì tự cuộn tới
+  if (t && !t.classList.contains("guide-glow")) { t.classList.add("guide-glow"); t.scrollIntoView({ block: "center", behavior: "smooth" }); }
+}
+function endGuide() {
+  clearInterval(Guide.timer);
+  document.querySelectorAll(".guide-glow").forEach(e => e.classList.remove("guide-glow"));
+  $("#guide").classList.add("hidden");
+  Object.assign(Guide, { steps: null, i: 0, id: null });
+  if (S) save(true);
+}
+// Bấm đúng nút đang sáng thì sang bước tiếp theo
+document.addEventListener("click", e => {
+  const st = Guide.steps && Guide.steps[Guide.i];
+  if (st && st.sel && e.target.closest && e.target.closest(st.sel)) setTimeout(() => { Guide.i++; showGuideStep(); }, 200);
+}, true);
+// Gợi ý tự bật theo tình huống: quán vắng, sắp hết nguyên liệu, mở được vị trí nhân viên, đủ điều kiện mở chi nhánh
+function checkHints() {
+  if (!S || Guide.steps || isPaused() || !["open", "prepare"].includes(R.phase)) return;
+  const sh = shop(), seen = S.seen || {};
+  const inPrepare = R.phase === "prepare";
+  if (R.phase === "open" && !R.dialog && $("#modal").classList.contains("hidden")) {
+    // Quán vắng mà chưa có quảng cáo
+    if (!adsFor(S.active).length && canAfford(MARKETING.to_roi.price) && (R.idleMin || 0) >= 45 && R.time < DAY_END - 60 && (S.lastAdHint || -9) <= S.day - 2) {
+      S.lastAdHint = S.day;
+      startGuide("hint_ads", [
+        { text: "😟 Quán vắng quá! Không chạy quảng cáo thì khách ít hơn hẳn. Bấm nút <b>📣 Quảng cáo</b> nhé.", sel: '[data-panel="ads"]' },
+        { text: "Chọn <b>📄 Phát tờ rơi</b> — rẻ nhất, có tác dụng ngay hôm nay.", sel: '[data-ad="to_roi"]' },
+        { text: "🎉 Tờ rơi đã dán lên quầy, khách sẽ ghé đông hơn. Đóng bảng để bán tiếp nhé!" },
+      ], true);
+      return;
+    }
+    // Sắp hết nguyên liệu lần đầu
+    if (!seen.hint_stock && Object.keys(INGREDIENTS).some(k => ingAvail(k) && !INGREDIENTS[k].free && (sh.inv[k] || 0) < 5)) {
+      startGuide("hint_stock", [
+        { text: "📦 Có nguyên liệu sắp hết! Bấm nút <b>Kho</b> để nhập thêm.", sel: '[data-panel="kho"]' },
+        { text: "Bấm <b>+10</b> hoặc <b>+30</b> ở nguyên liệu có số đỏ.", sel: "[data-buy]" },
+        { text: "Xong rồi! Nhớ xem kho mỗi sáng. Đóng bảng để bán tiếp." },
+      ]);
+      return;
+    }
+  }
+  if (inPrepare) {
+    // Vị trí nhân viên đầu tiên vừa mở khóa
+    if (!seen.hint_staff && !sh.staff.waiter && !roleReq(S.active, "waiter")) {
+      startGuide("hint_staff", [
+        { text: "👥 Quán đủ uy tín để thuê nhân viên đầu tiên rồi! Bấm <b>Nhân viên</b>.", sel: '[data-go="staff"]' },
+        { text: "Chọn một ứng viên <b>Phục vụ</b> và bấm <b>Thuê</b>. Xem kỹ ưu điểm (xanh) và nhược điểm (đỏ) nhé.", sel: '[data-hire="waiter"]' },
+        { text: "Phục vụ mới còn vụng, ghi order lác đác; Uyên đứng quầy cùng thì họ sẽ cứng tay dần. Vị trí tiếp theo mở sau 2 ngày." },
+      ]);
+      return;
+    }
+    // Đủ điều kiện mở chi nhánh
+    if (!seen.hint_branch && canExpand() === null && Object.keys(LOCATIONS).some(l => !S.shops.some(x => x.loc === l) && canAfford(LOCATIONS[l].cost))) {
+      startGuide("hint_branch", [
+        { text: "🗺️ Uyên đã có thể mở chi nhánh mới! Bấm <b>Chi nhánh</b> để xem bản đồ.", sel: '[data-go="chain"], #ex-yes' },
+        { text: "Chạm vào thành phố có dấu <b>✨</b> để xem chi tiết.", sel: ".pin.ready" },
+        { text: "Bấm <b>Mở chi nhánh</b>.", sel: "#c-open" },
+        { text: "Xác nhận để trừ tiền vào két chung. Hôm nay Uyên sẽ đứng quầy ở quán mới.", sel: "#co-yes" },
+        { text: "🎊 Chi nhánh mới đã mở! Quán cũ tự vận hành khi vắng Uyên. Mỗi quán có kho, máy móc và câu chuyện riêng." },
+      ]);
+    }
+  }
+}
+
 // ---------- Modal ----------
 function openModal(title, html, opts = {}) {
   $("#modal-title").innerHTML = title;
@@ -1676,6 +1824,7 @@ function openModal(title, html, opts = {}) {
   $("#modal-close").classList.toggle("hidden", !!opts.noClose);
   $("#modal").classList.remove("hidden");
   $("#modal").dataset.panel = opts.panel || "";
+  if (opts.panel && GUIDES[opts.panel] && S && !(S.seen || {})["p_" + opts.panel]) setTimeout(() => startGuide("p_" + opts.panel, GUIDES[opts.panel]), 60);
   return $("#modal-body");
 }
 function closeModal() { $("#modal").classList.add("hidden"); $("#modal").dataset.panel = ""; }
@@ -1769,11 +1918,11 @@ function startTutorial() {
   mountCustomer(c, "🎓 ", tutStep);
 }
 function tutClickCustomer(c) {
-  if (c.state !== "order") return;
+  if (c.state !== "order" || !R.tut) return;
   Sound.sfx("click");
   const d = DRINKS[c.drink];
   openDialog(c.look, `Bé Na <small>Em họ của Uyên</small>`, `Chị Uyên ơi, cho em một ly ${d.name} nha! Em làm khách đầu tiên của chị đó.`,
-    [{ label: `📝 Nhận order: ${d.name}`, main: true, fn: () => { closeDialog(); takeOrder(c); R.tut.step = 1; tutStep(); } }], { c, mood: "happy" });
+    [{ label: `📝 Nhận order: ${d.name}`, main: true, fn: () => { closeDialog(); if (!R.tut) return; takeOrder(c); R.tut.step = 1; tutStep(); } }], { c, mood: "happy" });
 }
 function tutIngredient(k) {
   const t = R.tut; if (!t || R.drip) return;
@@ -1899,6 +2048,7 @@ function showPrepare() {
     <div class="row"><span class="pill">${W.icon} ${loc().city}: ${W.name}</span>${weekend}<span class="pill">💰 ${money(S.money)}</span>
       ${S.marketing.map(m => `<span class="pill green">📣 ${MARKETING[m.id].name} (còn ${m.days} ngày)</span>`).join("")}</div>
     ${S.money < expectedCosts() * 1.2 ? `<div class="card" style="background:#ffe5e5"><h4>⚠️ Két tiền sắp cạn</h4><div>Chi phí cố định cuối ngày khoảng <b>${money(expectedCosts())}</b> (thuê mặt bằng, lương, điện nước) — két hiện có ${money(S.money)}. Két về 0 hoặc âm là phá sản!</div></div>` : ""}
+    ${adsFor(S.active).length ? `<div class="row"><span class="pill green">📣 Đang quảng cáo: ${adsFor(S.active).map(m => MARKETING[m.id].name).join(", ")}</span></div>` : `<div class="row"><span class="pill red">📣 Quán ${loc().city} chưa có quảng cáo — khách sẽ vắng hơn khoảng 30%</span></div>`}
     <h3>Sự kiện hôm nay</h3>${ev}
     ${cityNextText(shop()) ? `<div class="card" style="margin-top:8px;background:#fff8ec"><div class="sub" style="font-size:16px">📜 ${cityNextText(shop())}</div></div>` : ""}
     ${R.away && R.away.length ? `<div class="card" style="margin-top:8px"><h4>🛌 Nhân viên xin nghỉ hôm nay</h4><div class="sub">${R.away.join(", ")}</div></div>` : ""}
@@ -1906,12 +2056,13 @@ function showPrepare() {
     <h3>🎯 Mục tiêu</h3>${R.goals.map(g => `<div class="goal"><span>⬜ ${g.text}</span><span class="rw">+${money(g.reward)}</span></div>`).join("")}
     <div class="row" style="margin-top:16px">
       <button class="btn gray" data-go="kho">📦 Nhập kho</button><button class="btn gray" data-go="staff">👥 Nhân viên</button>
-      <button class="btn gray" data-go="chain">🗺️ Chi nhánh</button><button class="btn gray" data-go="menu">📜 Thực đơn</button>
+      <button class="btn gray" data-go="chain">🗺️ Chi nhánh</button><button class="btn gray" data-go="menu">📜 Thực đơn</button><button class="btn gray" data-go="ads">📣 Quảng cáo</button>
       <span class="spacer"></span><button class="btn big teal" id="p-open">🔓 Mở cửa!</button>
     </div>`, { noClose: true, panel: "prepare" });
   on(body, "[data-stand]", "click", c => { S.active = +c.dataset.stand; buildScene(); renderAll(); showPrepare(); });
   on(body, "[data-go]", "click", b => { khoTab = menuTab = staffTab = decorTab = S.active; PANELS[b.dataset.go](); });
   $("#p-open").onclick = openDay;
+  setTimeout(checkHints, 80);
   const affordable = Object.keys(LOCATIONS).filter(l => !S.shops.some(sh => sh.loc === l) && canAfford(LOCATIONS[l].cost));
   if (!R.expandAsked && canExpand() === null && affordable.length) {
     R.expandAsked = true;
@@ -1953,7 +2104,7 @@ function chartSvg() {
 }
 function showReport(r, isEnd) {
   const body = openModal(isEnd ? `🌙 Tổng kết ngày ${r.day}` : `📊 Sổ sách`, `
-    ${r ? reportTable(r) : '<p>Chưa có báo cáo nào.</p>'}
+    ${r ? reportTable(r) : '<p>Chưa có báo cáo nào.</p>'}${isEnd ? (setTimeout(() => startGuide("p_report_day", GUIDES.report_day), 60), "") : ""}
     <h3>📈 Doanh thu 14 ngày gần nhất</h3>${chartSvg()}
     <div class="row" style="margin-top:10px"><span class="pill">💰 Két: ${money(S.money)}</span><span class="pill">☕ Tổng ly: ${S.totals.served}</span><span class="pill">🌟 Hoàn hảo: ${S.totals.perfect}</span><span class="pill">💵 Tổng thu: ${money(S.totals.earned)}</span>
       ${S.money < expectedCosts() ? `<span class="pill red">⚠️ Két sắp cạn — về 0 là phá sản!</span>` : ""}
@@ -2081,16 +2232,18 @@ const PANELS = {
   ads() {
     const items = Object.keys(MARKETING).map(id => {
       const M = MARKETING[id], act = S.marketing.find(m => m.id === id);
-      return `<div class="card ${act ? "owned" : ""}"><h4>📣 ${M.name}</h4><div class="sub">${M.desc}</div><div class="row" style="margin-top:6px">${act ? `<span class="pill green">Đang chạy, còn ${act.days} ngày</span>` : `<button class="btn" data-ad="${id}" ${!canAfford(M.price) ? "disabled" : ""}>Chạy ${money(M.price)}</button>`}</div></div>`;
+      return `<div class="card ${act ? "owned" : ""}"><h4>${M.icon} ${M.name}</h4><div class="sub">${M.desc}</div><div class="row" style="margin-top:6px">${act ? `<span class="pill green">Đang chạy, còn ${act.days} ngày</span>` : `<button class="btn" data-ad="${id}" ${!canAfford(M.price) ? "disabled" : ""}>Chạy ${money(M.price)}</button>`}</div></div>`;
     }).join("");
-    const body = openModal("📣 Quảng cáo", `<p class="sub">Quảng cáo tăng lượng khách. Mời TikToker còn có thể khiến một vị khách đặc biệt ghé quán sớm hơn...</p><div class="grid">${items}</div>`, { panel: "ads" });
+    const now = adsFor(S.active);
+    const body = openModal("📣 Quảng cáo", `<p class="sub">Quảng cáo kéo khách tới quán. ${now.length ? `<span class="pill green">Quán ${loc().city} đang có quảng cáo</span>` : `<span class="pill red">Quán ${loc().city} chưa có quảng cáo — khách vắng hơn khoảng 30%</span>`}</p><div class="grid">${items}</div>`, { panel: "ads" });
     on(body, "[data-ad]", "click", b => {
       const id = b.dataset.ad, M = MARKETING[id];
       if (!canAfford(M.price)) return;
       S.money -= M.price; R.today.marketing += M.price;
-      S.marketing.push({ id, days: M.days, boost: M.boost, scope: M.scope });
+      S.marketing.push({ id, days: M.days, scope: M.scope, shop: S.active });
+      if (id === "kol") { S.kolVisit = true; toast("🎥 KOL đã nhận lời! Họ sẽ ghé quán Uyên để chụp hình, quay phim.", "gold"); }
       toast(`📣 Bắt đầu chiến dịch: ${M.name}`, "gold"); Sound.sfx("coin");
-      renderHud(); save(true); refreshPanel();
+      renderAds(); renderHud(); save(true); refreshPanel();
     });
   },
   chain(sel) {
@@ -2323,7 +2476,10 @@ const PANELS = {
       <div class="row">Nhạc jazz <input type="range" id="s-music" min="0" max="1" step="0.05" value="${S.settings.music}"> Hiệu ứng <input type="range" id="s-sfx" min="0" max="1" step="0.05" value="${S.settings.sfx}"></div>
       <h3>🎮 Trò chơi</h3>
       <div class="row"><label><input type="checkbox" id="s-hints" ${S.settings.hints ? "checked" : ""}> Hiện gợi ý công thức trên quầy</label></div>
-      <div class="row" style="margin-top:14px"><button class="btn gray" id="s-title">🏠 Về màn hình chính</button><button class="btn gray" id="s-howto">📖 Cách chơi</button></div>`, { panel: "settings" });
+      <div class="row" style="margin-top:6px">📱 Khi cầm máy dọc, game tự xoay ngang theo chiều:
+        <button class="btn ${rotDir() === "right" ? "teal" : "gray"}" data-rot="right">↻ Sang phải</button><button class="btn ${rotDir() === "left" ? "teal" : "gray"}" data-rot="left">↺ Sang trái</button></div>
+      <div class="row" style="margin-top:14px"><button class="btn gray" id="s-title">🏠 Về màn hình chính</button><button class="btn gray" id="s-howto">📖 Cách chơi</button></div>
+      <div class="row" style="margin-top:10px"><span class="sub">Phiên bản ${APP_VERSION}</span><button class="btn gray" id="s-update">🔄 Kiểm tra cập nhật</button></div>`, { panel: "settings" });
     on(body, "[data-saveto]", "click", b => {
       const n = +b.dataset.saveto;
       if (n !== slot && readSlot(n) && !confirm(`Ghi đè ô ${n}?`)) return;
@@ -2339,7 +2495,9 @@ const PANELS = {
     $("#s-music").oninput = e => { S.settings.music = +e.target.value; applySettings(); };
     $("#s-sfx").oninput = e => { S.settings.sfx = +e.target.value; applySettings(); Sound.sfx("coin"); };
     $("#s-hints").onchange = e => { S.settings.hints = e.target.checked; renderBench(); };
+    on(body, "[data-rot]", "click", b => { try { localStorage.setItem("chnu_rot", b.dataset.rot); } catch (e) {} fit(); refreshPanel(); });
     $("#s-title").onclick = () => { save(true); closeDialog(); showTitle(); };
+    $("#s-update").onclick = () => checkUpdate(true);
     $("#s-howto").onclick = () => openModal("📖 Cách chơi", TUTORIAL.map(t => `<p style="font-size:20px">${t}</p>`).join(""));
   },
 };
@@ -2524,7 +2682,7 @@ function bindUI() {
 }
 
 // Hook kiểm thử: chỉ bật khi URL có ?debug
-if (location.search.includes("debug")) window.__dbg = { get S() { return S; }, R, Music, prepareDay, showPrepare, checkChapter, buildScene, newShop, cityNextText, startQte, spawnCustomer, PANELS, giveItem,
+if (location.search.includes("debug")) window.__dbg = { get S() { return S; }, R, Music, prepareDay, showPrepare, checkChapter, buildScene, newShop, cityNextText, spawnKol, checkHints, checkUpdate, lambda, Guide, startQte, spawnCustomer, PANELS, giveItem,
   clear() { R.customers.slice().forEach(c => removeCustomer(c)); closeDialog(); },
   spawnMulti(n) { for (let k = 0; k < 30; k++) { spawnCustomer(); const c = R.customers[R.customers.length - 1]; if (c && c.items.length >= n) return; if (c) removeCustomer(c); } },
   spawnReg(id) { const ch = CHARACTERS.find(c => c.id === id); const s0 = freeSlot(); if (s0 < 0) return; if (!S.chars[id]) S.chars[id] = { aff: 0, met: true, chatIdx: 0, story: 0, visits: 0 };
@@ -2632,6 +2790,74 @@ function bindDev() {
 // ---------- Khởi động ----------
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(() => {});
 fit(); bindUI(); bindDev();
+// iOS: chặn phóng to khi chụm hai ngón hoặc chạm đúp
+["gesturestart", "gesturechange", "gestureend"].forEach(ev => document.addEventListener(ev, e => e.preventDefault(), { passive: false }));
+document.addEventListener("dblclick", e => e.preventDefault(), { passive: false });
+// Khi game đang xoay ngang trên máy cầm dọc, tự cuộn theo hướng vuốt đã quy đổi về khung game
+const RotScroll = { el: null, x: 0, y: 0, vx: 0, vy: 0, moved: false, t: 0 };
+const scrollableFrom = (n, dx, dy) => {
+  for (; n && n !== document.body; n = n.parentElement) {
+    const cs = getComputedStyle(n);
+    if (Math.abs(dy) >= Math.abs(dx) && /auto|scroll/.test(cs.overflowY) && n.scrollHeight > n.clientHeight + 1) return n;
+    if (Math.abs(dx) > Math.abs(dy) && /auto|scroll/.test(cs.overflowX) && n.scrollWidth > n.clientWidth + 1) return n;
+  }
+  return null;
+};
+const toLocal = (dx, dy) => document.body.classList.contains("rot-left") ? [-dy, dx] : [dy, -dx];
+document.addEventListener("touchstart", e => {
+  if (!document.body.classList.contains("rotated") || e.touches.length !== 1) return;
+  const t = e.touches[0];
+  Object.assign(RotScroll, { el: null, x: t.clientX, y: t.clientY, vx: 0, vy: 0, moved: false, t: performance.now(), target: e.target });
+}, { passive: true });
+document.addEventListener("touchmove", e => {
+  if (!document.body.classList.contains("rotated") || RotScroll.target == null || e.touches.length !== 1) return;
+  const t = e.touches[0];
+  const [dx, dy] = toLocal(t.clientX - RotScroll.x, t.clientY - RotScroll.y);
+  if (!RotScroll.moved && Math.hypot(dx, dy) < 6) return;
+  if (!RotScroll.el) RotScroll.el = scrollableFrom(RotScroll.target, dx, dy);
+  RotScroll.moved = true; e.preventDefault();
+  if (RotScroll.el) { RotScroll.el.scrollTop -= dy; RotScroll.el.scrollLeft -= dx; }
+  const now = performance.now(), dt = Math.max(1, now - RotScroll.t);
+  RotScroll.vx = dx / dt; RotScroll.vy = dy / dt; RotScroll.t = now; RotScroll.x = t.clientX; RotScroll.y = t.clientY;
+}, { passive: false });
+document.addEventListener("touchend", () => {
+  const el = RotScroll.el; RotScroll.target = null; if (!el) return;
+  // Trượt tiếp một đoạn cho tự nhiên
+  let vx = RotScroll.vx * 16, vy = RotScroll.vy * 16;
+  const glide = () => { if (Math.abs(vx) + Math.abs(vy) < 0.5) return; el.scrollTop -= vy; el.scrollLeft -= vx; vx *= 0.92; vy *= 0.92; requestAnimationFrame(glide); };
+  requestAnimationFrame(glide);
+}, { passive: true });
+// Tự kiểm tra bản cập nhật (bản web, iPhone/Android). Bản desktop tự cập nhật qua GitHub Releases.
+const isDesktopApp = /Electron/.test(navigator.userAgent);
+let pendingUpdate = null;
+async function checkUpdate(manual) {
+  if (isDesktopApp) { if (manual && window.desktopApp) window.desktopApp.checkUpdate(); return; }
+  try {
+    const r = await fetch("version.json?t=" + Date.now(), { cache: "no-store" });
+    const v = (await r.json()).version;
+    if (v && v !== APP_VERSION) { pendingUpdate = v; offerUpdate(); }
+    else if (manual) toast(`✅ Bạn đang dùng bản mới nhất (${APP_VERSION})`, "good");
+  } catch (e) { if (manual) toast("Không kiểm tra được cập nhật (đang ngoại tuyến?)", "bad"); }
+}
+async function applyUpdate() {
+  if (S) save(true);
+  try { const keys = await caches.keys(); await Promise.all(keys.map(k => caches.delete(k))); } catch (e) {}
+  try { const reg = await navigator.serviceWorker.getRegistration(); if (reg) await reg.update(); } catch (e) {}
+  location.reload();
+}
+function offerUpdate() {
+  // Ở màn hình chính thì cài luôn, đang chơi thì hỏi để không cắt ngang ngày làm việc
+  if (!S) return applyUpdate();
+  if ($("#upd-bar")) return;
+  const bar = document.createElement("div"); bar.id = "upd-bar";
+  bar.innerHTML = `✨ Có bản mới ${pendingUpdate}. <button class="btn teal">Cập nhật ngay</button><button class="btn gray">Để sau</button>`;
+  bar.querySelector(".teal").onclick = applyUpdate;
+  bar.querySelector(".gray").onclick = () => bar.remove();
+  $("#stage").appendChild(bar);
+}
+setTimeout(checkUpdate, 4000);
+setInterval(checkUpdate, 20 * 60 * 1000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) checkUpdate(); });
 setTimeout(fit, 300); // iOS cập nhật kích thước muộn sau khi xoay màn hình
 addEventListener("orientationchange", () => setTimeout(fit, 300));
 S = newState();

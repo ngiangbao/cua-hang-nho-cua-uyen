@@ -1,7 +1,7 @@
 {
   "name": "cua-hang-nho-cua-uyen",
   "productName": "CuaHangNhoCuaUyen",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Game kinh doanh quán cà phê: pha chế, trò chuyện với khách ruột và mở chi nhánh khắp Việt Nam.",
   "author": "Giang Bao Nguyen <ngiangbao@gmail.com>",
   "homepage": "https://ngiangbao.github.io/cua-hang-nho-cua-uyen/",
@@ -23,6 +23,7 @@
     "artifactName": "CuaHangNhoCuaUyen-${version}-${os}-${arch}.${ext}",
     "files": [
       "main.js",
+      "preload.js",
       "app/**/*"
     ],
     "directories": {
@@ -42,6 +43,13 @@
           "arch": [
             "x64"
           ]
+        }
+      ],
+      "publish": [
+        {
+          "provider": "github",
+          "owner": "ngiangbao",
+          "repo": "cua-hang-nho-cua-uyen"
         }
       ]
     },
@@ -75,12 +83,22 @@
       "executableName": "cua-hang-nho-cua-uyen",
       "maintainer": "Giang Bao Nguyen <ngiangbao@gmail.com>",
       "synopsis": "Game kinh doanh quán cà phê ấm áp",
-      "description": "Game mô phỏng quán cà phê ấm áp với giao diện tối giản và nhạc nền thư giãn."
+      "description": "Game mô phỏng quán cà phê ấm áp với giao diện tối giản và nhạc nền thư giãn.",
+      "publish": [
+        {
+          "provider": "github",
+          "owner": "ngiangbao",
+          "repo": "cua-hang-nho-cua-uyen"
+        }
+      ]
     },
     "publish": null
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/ngiangbao/cua-hang-nho-cua-uyen.git"
+  },
+  "dependencies": {
+    "electron-updater": "^6.3.9"
   }
 }

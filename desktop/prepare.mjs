@@ -8,5 +8,5 @@ const root = join(here, "..");
 const out = join(here, "app");
 rmSync(out, { recursive: true, force: true });
 mkdirSync(out);
-for (const f of ["index.html", "manifest.webmanifest", "sw.js", "css", "js", "icons"]) cpSync(join(root, f), join(out, f), { recursive: true });
+for (const f of ["index.html", "manifest.webmanifest", "sw.js", "version.json", "css", "js", "icons"]) cpSync(join(root, f), join(out, f), { recursive: true });
 console.log("Đã chép bản web vào", out);

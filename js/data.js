@@ -1,4 +1,6 @@
 // ===== Dữ liệu game "Cửa hàng nhỏ của Uyên" =====
+// Phiên bản hiện tại; nhớ đổi cùng version.json khi phát hành
+const APP_VERSION = "1.0.2";
 
 const HERO = "Bảo Uyên";
 
@@ -193,10 +195,12 @@ const EVENTS = [
   { id: "khuyen_mai", name: "Chợ đầu mối giảm giá", icon: "🛒", desc: "Chợ giảm 25% giá nguyên liệu hôm nay. Nhập kho thôi!", discount: 0.25 },
 ];
 
+// Quảng cáo: lvl là mức khách so với mức chuẩn khi đang quảng cáo. Không chạy quảng cáo, quán chỉ còn AD_BASE (vắng hơn 30%).
+const AD_BASE = 0.7;
 const MARKETING = {
-  to_roi: { name: "Phát tờ rơi",           price: 150000,  days: 1, boost: 0.2,  scope: "active", desc: "+20% khách tại quán Uyên đứng hôm nay" },
-  mxh:    { name: "Quảng cáo mạng xã hội", price: 600000,  days: 3, boost: 0.25, scope: "all",    desc: "+25% khách cả chuỗi trong 3 ngày" },
-  kol:    { name: "Mời TikToker review",   price: 1800000, days: 3, boost: 0.45, scope: "all",    desc: "+45% khách cả chuỗi trong 3 ngày" },
+  to_roi: { name: "Phát tờ rơi",           icon: "📄", price: 150000,  days: 1, lvl: 1.0,  scope: "active", desc: "Dán tờ rơi lên quầy: khách về mức bình thường tại quán Uyên đứng hôm nay" },
+  mxh:    { name: "Quảng cáo mạng xã hội", icon: "📱", price: 600000,  days: 3, lvl: 1.1,  scope: "all",    desc: "Bài đăng lan khắp mạng: khách bình thường +10% cho cả chuỗi trong 3 ngày" },
+  kol:    { name: "Mời KOL review",        icon: "🎥", price: 1800000, days: 3, lvl: 1.3,  scope: "all",    desc: "KOL tới quán chụp hình, quay phim: khách +30% cho cả chuỗi trong 3 ngày" },
 };
 
 // ---------- Lời thoại khách vãng lai ----------
@@ -902,3 +906,43 @@ const TUTORIAL = [
   "📺 Bấm vào TV trên tường để đổi nhạc hoặc tìm nhạc YouTube.",
   "⚠️ Phá sản khi uy tín của bất kỳ quán nào về 0 (khách bỏ đi, pha sai món làm giảm uy tín) hoặc khi két tiền về 0 hay âm (sau khi trả tiền thuê, lương cuối ngày). Phá sản là phải chơi lại từ đầu!",
 ];
+
+// ---------- Hướng dẫn lần đầu mở từng tính năng ----------
+// Mỗi bước: text; sel (nếu có) là nút cần bấm — nút sẽ sáng lên và bấm vào mới sang bước tiếp
+const GUIDES = {
+  kho: [
+    { text: "📦 Đây là <b>kho nguyên liệu</b> của quán. Mỗi ly pha sẽ trừ nguyên liệu; hết thì không pha được món đó." },
+    { text: "Bấm <b>+10</b> để nhập thử 10 phần nguyên liệu. Tiền nhập hàng trừ vào két.", sel: "[data-buy]" },
+    { text: "Nguyên liệu dưới 5 phần sẽ hiện số đỏ. Khi có <b>Thu ngân</b>, kho sẽ tự nhập mỗi sáng." },
+  ],
+  menu: [
+    { text: "📜 <b>Thực đơn & Máy móc</b>: các món quán đang bán kèm công thức. Bấm nguyên liệu đúng thứ tự để được “Hoàn hảo”." },
+    { text: "Mua thêm máy (máy đánh trứng, máy espresso…) để mở món mới. Mỗi quán có máy riêng." },
+  ],
+  staff: [
+    { text: "👥 Thuê nhân viên theo thứ tự <b>Phục vụ → Tạp vụ → Thu ngân → Pha chế</b>; mỗi vị trí mới mở sau 2 ngày." },
+    { text: "Mỗi ứng viên có <b>ưu điểm (xanh)</b> và có thể có <b>nhược điểm (đỏ)</b>. Nhân viên mới còn vụng, cứng tay dần khi Uyên làm cùng." },
+    { text: "Không ưng ai thì bấm <b>🔄 Tìm ứng viên khác</b>." },
+  ],
+  decor: [{ text: "🪴 <b>Trang trí</b> làm quán ấm cúng hơn: thêm chỗ cho khách xếp hàng, tăng tip, tăng uy tín… Mỗi quán trang trí riêng." }],
+  ads: [
+    { text: "📣 <b>Quảng cáo</b> kéo khách tới quán. Không chạy quảng cáo, quán sẽ vắng hơn khoảng 30%." },
+    { text: "📄 Tờ rơi rẻ, dán ở quầy, có tác dụng 1 ngày. 📱 Mạng xã hội và 🎥 KOL có tác dụng 3 ngày cho cả chuỗi — KOL còn tới tận quán quay phim!" },
+  ],
+  chain: [
+    { text: "🗺️ <b>Bản đồ chi nhánh</b>: ☕ là quán đã mở, ✨ là nơi mở được ngay, 📍 là nơi chưa đủ điều kiện." },
+    { text: "Chạm vào một thành phố để xem giá mở, món địa phương và câu chuyện riêng của quán đó.", sel: ".vn-map .pin" },
+    { text: "Muốn mở chi nhánh mới, nhân viên các quán cũ phải đủ cứng tay để vận hành khi vắng Uyên." },
+  ],
+  album: [{ text: "💞 <b>Khách ruột</b>: trò chuyện và pha đúng món yêu thích để tăng tim. Đủ 1, 3, 5 tim họ sẽ ngồi tâm sự và tặng kỷ vật." }],
+  collect: [{ text: "📚 <b>Sổ sưu tập</b>: kỷ vật khách ruột trao cho Uyên. Gom đủ một bộ theo vùng để nhận thưởng." }],
+  notebook: [{ text: "📖 <b>Sổ tay của ngoại</b>: dùng 🧩 mảnh ghép câu chuyện để khôi phục các trang bị mờ. Mảnh ghép có được khi pha đúng ly hợp tâm trạng, nghe khách tâm sự, nhận kỷ vật." }],
+  report: [{ text: "📊 <b>Sổ sách</b>: doanh thu, tiền tip, chi phí thuê mặt bằng, lương, điện nước của từng quán mỗi ngày. Két tiền về 0 là phá sản!" }],
+  achv: [{ text: "🏆 <b>Thành tựu</b>: các cột mốc Uyên đã đạt được." }],
+  settings: [{ text: "⚙️ Game tự lưu thường xuyên. Ở đây có thể lưu vào ô khác, xuất file save để chuyển máy, chỉnh âm lượng." }],
+  goals: [{ text: "🎯 <b>Mục tiêu hôm nay</b>: hoàn thành để nhận thưởng tiền và uy tín." }],
+  music: [{ text: "📺 <b>TV của quán</b>: đổi kiểu nhạc hoặc dán link YouTube để phát trên TV. Trong lúc chọn nhạc, quán tạm ngưng đón khách." }],
+  board: [{ text: "📋 <b>Bảng thực đơn</b>: tất cả món quán đang bán và công thức từng bước. Xem bất cứ lúc nào nếu quên công thức." }],
+  lab: [{ text: "🧪 <b>Phòng thử công thức</b>: chọn 3–5 nguyên liệu theo thứ tự để tạo món signature. Món càng hợp vị càng bán được giá cao." }],
+  report_day: [{ text: "🌙 <b>Tổng kết ngày</b>: doanh thu trừ chi phí (thuê, lương, điện nước, nhập hàng) là lãi của ngày. Két tiền về 0 hoặc âm là phá sản." }],
+};

@@ -49,6 +49,8 @@ jobs:
             desktop/dist/*.dmg
             desktop/dist/*.AppImage
             desktop/dist/*.deb
+            desktop/dist/latest*.yml
+            desktop/dist/*.blockmap
           if-no-files-found: error
 
   android:
@@ -102,4 +104,5 @@ jobs:
             - Linux: file `.AppImage` (chạy trực tiếp) hoặc `.deb` (Ubuntu, Debian)
             - Android: file `.apk`
 
+            Bản Windows (cài đặt) và Linux AppImage tự tải và cài bản mới; các bản khác sẽ báo khi có bản mới.
             Hướng dẫn cài đặt: xem phần “Tải bản cài đặt” trong README.
