@@ -588,3 +588,39 @@ html[lang="en"] #menu-board:after { content: "👆 See menu"; }
 .reg-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .reg-grid { grid-auto-rows: 1fr; }
 .reg-grid > .card { display: flex; flex-direction: column; min-height: 280px; }
+
+/* ===== Màn hình chờ ===== */
+body.on-title #hud, body.on-title #dock, body.on-title #station, body.on-title #guide, body.on-title #dialog, body.on-title #closed-sign { display: none !important; }
+body.on-title #scene, body.phone.on-title #scene { top: 0; left: 0; transform: scale(var(--tsc)); transform-origin: 0 0; }
+#scene { transition: opacity .6s; }
+#scene.t-fade { opacity: 0; }
+#title-screen { position: absolute; inset: 0; z-index: 40; background: linear-gradient(90deg, rgba(45,36,36,.78) 0%, rgba(45,36,36,.42) 36%, rgba(45,36,36,0) 62%); animation: fadeIn .5s; }
+.t-logo { position: absolute; left: 60px; top: 56px; display: flex; gap: 18px; align-items: center; color: #fff; max-width: 900px; }
+.t-cup { font-size: 84px; filter: drop-shadow(0 6px 10px rgba(0,0,0,.35)); animation: tbob 3s ease-in-out infinite; }
+.t-name { font-size: 62px; font-weight: 800; line-height: 1.05; text-shadow: 0 4px 0 var(--coral-d), 0 10px 26px rgba(0,0,0,.45); }
+.t-sub { font-size: 20px; margin-top: 8px; opacity: .95; text-shadow: 0 2px 6px rgba(0,0,0,.6); }
+.t-menu { position: absolute; left: 60px; top: calc(250px + var(--E) / 2); display: flex; flex-direction: column; gap: 14px; width: 430px; }
+.t-btn { display: flex; flex-direction: column; align-items: flex-start; background: rgba(255,248,236,.96); color: var(--ink); font-size: 27px; font-weight: 800; padding: 15px 24px;
+  border-radius: 18px; box-shadow: 0 5px 0 var(--line), 0 10px 24px rgba(0,0,0,.25); transition: transform .15s; text-align: left; }
+.t-btn:hover, .t-btn:active { transform: translateX(6px); }
+.t-btn.main { background: var(--coral); color: #fff; box-shadow: 0 5px 0 var(--coral-d), 0 10px 24px rgba(0,0,0,.3); }
+.t-btn small { font-size: 16px; font-weight: 600; opacity: .9; margin-top: 2px; }
+.t-city { position: absolute; right: 28px; bottom: 24px; background: rgba(255,248,236,.94); padding: 8px 18px; border-radius: 14px; font-weight: 800; font-size: 20px; box-shadow: 0 4px 12px rgba(0,0,0,.2); }
+.t-ver { position: absolute; left: 60px; bottom: 20px; color: #fff; opacity: .75; font-size: 14px; }
+.t-tip { position: absolute; left: 60px; bottom: 44px; color: #fff; font-size: 15px; opacity: .95; }
+.t-lang { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; background: rgba(45,36,36,.65); color: #fff; text-align: center; }
+.t-lang h2 { font-size: 36px; margin: 0; text-shadow: 0 3px 10px rgba(0,0,0,.5); }
+.t-lang .sub { color: #fff; opacity: .85; }
+.t-langs { display: flex; gap: 22px; }
+.t-langs .t-btn { align-items: center; min-width: 260px; }
+.demo-order { display: flex; flex-direction: column; align-items: center; gap: 2px; }
+.demo-order svg { width: 46px; height: 46px; }
+.demo-order small { font-size: 12px; }
+@keyframes tbob { 50% { transform: translateY(-8px) rotate(-5deg); } }
+body.phone .t-logo { left: 36px; top: 30px; }
+body.phone .t-name { font-size: 56px; }
+body.phone .t-menu { left: 36px; top: 200px; width: 420px; }
+body.phone .t-ver, body.phone .t-tip { left: 36px; }
+body.on-title #modal { z-index: 50; top: 0; }
+body.on-title #toasts { z-index: 55; }
+body.on-title .shop-sign { display: none; }

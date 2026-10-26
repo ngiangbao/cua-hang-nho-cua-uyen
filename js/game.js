@@ -169,6 +169,8 @@ function fit() {
   const sc = Math.min((W - PHONE_STATION) / 1010, (H - 56 - PHONE_DOCK) / 576);
   st.style.setProperty("--sc", sc.toFixed(4));
   st.style.setProperty("--stw", Math.round(W - 1010 * sc) + "px");
+  // Màn hình chờ: cảnh quán phủ kín khung game
+  st.style.setProperty("--tsc", Math.max(W / 1010, H / (phone ? 576 : 576 + E)).toFixed(4));
   // Trên điện thoại, hộp thoại nằm ngoài cảnh quán (cảnh bị thu nhỏ) để chữ không bị nhỏ theo
   const dlg = $("#dialog"), host = phone ? st : $("#scene");
   if (dlg.parentElement !== host) host.appendChild(dlg);
@@ -1919,34 +1921,135 @@ function refreshPanel() { const p = $("#modal").dataset.panel; if (p && PANELS[p
 // Chọn ngôn ngữ (viết cả hai thứ tiếng để ai cũng đọc được)
 const langRow = () => `<div class="row lang-row" style="margin-top:10px">🌐 Ngôn ngữ / Language:
   <button class="btn ${LANG === "vi" ? "teal" : "gray"}" data-lang="vi">🇻🇳 Tiếng Việt</button><button class="btn ${LANG === "en" ? "teal" : "gray"}" data-lang="en">🇬🇧 English</button></div>`;
+// ---------- Màn hình chờ ----------
+// Logo + nút Tiếp tục / Bắt đầu mới / Cài đặt; phía sau là cảnh quán tự chạy, đổi thành phố liên tục
+const Title = { timers: [], people: [], city: 0, loc: "hanoi", cycle: null };
+const tAfter = (ms, fn) => Title.timers.push(setTimeout(fn, ms));
+function titleStop() {
+  Title.timers.forEach(clearTimeout); Title.timers = []; clearInterval(Title.cycle); Title.cycle = null;
+  Title.people.forEach(p => p.e.remove()); Title.people = [];
+  document.body.classList.remove("on-title");
+  const ts = $("#title-screen"); if (ts) ts.remove();
+}
+// Dựng cảnh một thành phố bằng một trạng thái mẫu (đủ đồ trang trí), không đụng tới bản lưu
+function titleScene(i) {
+  const locs = Object.keys(LOCATIONS), loc = locs[i % locs.length], keep = S;
+  const D = newState();
+  D.shops[0] = newShop(loc, true);
+  Object.keys(DECOR).forEach(k => D.shops[0].decor[k] = DECOR[k].max || 1);
+  Title.people.forEach(p => p.e.remove()); Title.people = [];
+  R.customers = []; STF.sig = "";
+  buildScene();
+  S = keep; Title.loc = loc;
+  const tag = $("#t-city"); if (tag) tag.textContent = `📍 ${LOCATIONS[loc].city}`;
+}
+function titleSpawn() {
+  if (R.phase !== "title" || Title.people.length >= 3) return;
+  const used = Title.people.map(p => p.slot), free = [0, 1, 2, 3].filter(k => !used.includes(k));
+  const slotI = pick(free), look = randLook(), e = el("div", "customer walking demo");
+  const menu = Object.keys(DRINKS).filter(id => !DRINKS[id].secret && !DRINKS[id].equip && (!DRINKS[id].only || DRINKS[id].only === Title.loc));
+  const d = pick(menu.length ? menu : ["den_da"]);
+  e.style.left = "1100px";
+  e.innerHTML = Art.person(look, "neutral") + `<div class="bubble"><span class="big">👋</span></div>`;
+  $("#customers").appendChild(e);
+  const p = { e, slot: slotI }; Title.people.push(p);
+  const bub = h => { const b = e.querySelector(".bubble"); if (b) b.innerHTML = h; };
+  requestAnimationFrame(() => requestAnimationFrame(() => { e.style.left = slotX(slotI, 4) + "px"; }));
+  tAfter(1500, () => { e.classList.remove("walking"); bub(`<span class="big">💬</span>`); });
+  tAfter(2700, () => bub(`<div class="demo-order">${Art.drinkIcon(d)}<small>${DRINKS[d].name}</small></div>`));
+  tAfter(5600, () => { const per = e.querySelector(".person"); if (per) per.outerHTML = Art.person(look, "happy"); bub(`<span class="big">😋</span>`); const pos = { x: slotX(slotI, 4) + 40, y: 230 + R.E }; floater(pos.x, pos.y, "+" + money(DRINKS[d].price), "#2a9d8f"); });
+  tAfter(7400, () => { e.classList.add("walking"); e.style.left = "-220px"; });
+  tAfter(9200, () => { e.remove(); Title.people = Title.people.filter(q => q !== p); });
+}
+function titleSaves() {
+  return [1, 2, 3].map(n => ({ n, d: readSlot(n) })).filter(x => x.d);
+}
+function bestSlot() {
+  const ls = lastSlot(); if (ls && readSlot(ls)) return ls;
+  const all = titleSaves().sort((a, b) => (b.d.savedAt || 0) - (a.d.savedAt || 0));
+  return all.length ? all[0].n : null;
+}
 function showTitle() {
   R.phase = "title"; R.paused = false; setPauseUI();
-  const ls = lastSlot(), data = ls ? readSlot(ls) : null;
+  closeModal(); closeDialog();
+  R.customers.forEach(c => c.el && c.el.remove()); R.customers = [];
+  titleStop();
+  document.body.classList.add("on-title");
+  const ts = el("div"); ts.id = "title-screen"; $("#stage").appendChild(ts);
+  // Lần đầu mở game: chọn ngôn ngữ một lần, lưu lại cho các lần sau
+  let chosen = null; try { chosen = localStorage.getItem("chnu_lang"); } catch (e) {}
+  if (!chosen) {
+    ts.innerHTML = `<div class="t-lang"><div class="t-cup">☕</div><h2>Chọn ngôn ngữ · Choose your language</h2>
+      <div class="t-langs"><button class="t-btn" data-lang="vi">🇻🇳 Tiếng Việt</button><button class="t-btn" data-lang="en">🇬🇧 English</button></div>
+      <p class="sub">Có thể đổi lại trong Cài đặt · You can change it later in Settings</p></div>`;
+    on(ts, "[data-lang]", "click", b => setLang(b.dataset.lang));
+    return;
+  }
+  const sl = bestSlot(), data = sl ? readSlot(sl) : null;
+  const info = data ? L`Ngày ${data.state.day} · ${data.state.shops.length} quán · ${money(data.state.money)}` : "";
+  ts.innerHTML = `<div class="t-logo"><div class="t-cup">☕</div><div><div class="t-name">${L("Cửa hàng nhỏ của Uyên")}</div>
+      <div class="t-sub">${L("Pha chế · Trò chuyện · Mở chuỗi quán từ phố cổ Hà Nội đến bờ sông Hương")}</div></div></div>
+    <div class="t-menu">
+      ${data ? `<button class="t-btn main" id="t-continue">▶ ${L("Tiếp tục")}<small>${info}</small></button>` : ""}
+      <button class="t-btn ${data ? "" : "main"}" id="t-new">✨ ${L("Bắt đầu mới")}</button>
+      <button class="t-btn" id="t-settings">⚙️ ${L("Cài đặt")}</button>
+    </div>
+    <div class="t-city" id="t-city"></div><div class="t-ver">v${APP_VERSION}</div>
+    ${isIOS && !isStandalone() ? `<div class="t-tip">📱 ${L("Thêm vào MH chính để chơi toàn màn hình")}</div>` : ""}`;
+  const begin = n => { titleStop(); slot = n; newState(); registerSignatures(); S.introDone = false; applySettings(); STF.sig = ""; buildScene(); renderAll(); startMusic(); showIntro(); };
+  const cont = $("#t-continue");
+  if (cont) cont.onclick = () => { titleStop(); slot = sl; startMusic(); STF.sig = ""; loadData(readSlot(sl)); };
+  $("#t-new").onclick = () => {
+    const free = [1, 2, 3].find(n => !readSlot(n));
+    if (free) return begin(free);
+    // Cả 3 ô đều có tiến trình: hỏi ghi đè ô nào
+    const body = openModal(L("✨ Bắt đầu mới"), `<p>${L("Cả 3 ô lưu đều đã có tiến trình. Chọn một ô để ghi đè:")}</p>` + titleSaves().map(x =>
+      `<div class="slot"><div class="info"><b>${L("Ô lưu")} ${x.n}</b><br><span class="sub">${L`Ngày ${x.d.state.day} · ${x.d.state.shops.length} quán · ${money(x.d.state.money)}`}</span></div><button class="btn" data-over="${x.n}">${L("Ghi đè & chơi mới")}</button></div>`).join(""));
+    on(body, "[data-over]", "click", b => { const n = +b.dataset.over; if (confirm(L`Xóa tiến trình ở ô ${n} và chơi lại từ đầu?`)) { closeModal(); begin(n); } });
+  };
+  $("#t-settings").onclick = titleSettings;
+  titleScene(Title.city);
+  titleSpawn(); tAfter(1200, titleSpawn);
+  Title.cycle = setInterval(() => {
+    titleSpawn();
+    if (Date.now() - (Title.since || 0) > 20000) {
+      Title.since = Date.now(); Title.city++;
+      $("#scene").classList.add("t-fade");
+      tAfter(600, () => { titleScene(Title.city); $("#scene").classList.remove("t-fade"); });
+    }
+  }, 2600);
+  Title.since = Date.now();
+}
+// Cài đặt ở màn hình chờ: ngôn ngữ, chiều xoay, quản lý ô lưu, nhập file save, cập nhật
+function titleSettings() {
   const slots = [1, 2, 3].map(n => {
     const d = readSlot(n);
-    return L`<div class="slot"><div class="info"><b>Ô lưu ${n}</b><br><span class="sub">${d ? L`Ngày ${d.state.day} · ${d.state.shops.length} quán · ${money(d.state.money)} · ${new Date(d.savedAt).toLocaleString(LOCALE)}` : L("Trống")}</span></div>
-      ${d ? L`<button class="btn teal" data-load="${n}">Tải</button>` : ""}<button class="btn ${d ? "gray" : ""}" data-new="${n}">${d ? L("Chơi lại từ đầu") : L("Bắt đầu mới")}</button></div>`;
+    return `<div class="slot"><div class="info"><b>${L("Ô lưu")} ${n}</b><br><span class="sub">${d ? L`Ngày ${d.state.day} · ${d.state.shops.length} quán · ${money(d.state.money)}` : L("Trống")}</span></div>
+      ${d ? `<button class="btn teal" data-load="${n}">${L("Tải")}</button><button class="btn gray" data-del="${n}">🗑️</button>` : ""}</div>`;
   }).join("");
-  const body = openModal("", L`
-    <div class="intro-wrap">
-      <div class="portrait">${Art.person(Art.UYEN, "happy")}</div>
-      <div style="flex:1">
-        <div style="font-size:54px;font-weight:800;color:var(--coral-d);line-height:1">☕ Cửa hàng nhỏ của Uyên</div>
-        <p style="font-size:20px;color:var(--muted)">Pha chế · Trò chuyện · Mở chuỗi quán từ phố cổ Hà Nội đến bờ sông Hương</p>
-        ${data ? L`<button class="btn big teal" id="t-continue">▶ Tiếp tục (ô ${ls} · ngày ${data.state.day})</button>` : L`<button class="btn big" id="t-new">✨ Bắt đầu chơi</button>`}
-        <h3>Ô lưu</h3>${slots}
-        <div class="row"><button class="btn gray" id="t-import">📥 Nhập file save</button><span class="sub">Tiến trình được lưu tự động trên ${isStandalone() ? L("ứng dụng") : L("trình duyệt")} này.</span></div>
-        ${isIOS && !isStandalone() ? L`<div class="install-tip">📱 <b>Cài như ứng dụng:</b> bấm nút Chia sẻ <b>⬆︎</b> của Safari → <b>“Thêm vào MH chính”</b>. Lần sau mở icon ☕ trên màn hình là chơi toàn màn hình, offline vẫn được. <br><span class="sub">Lưu ý: iOS tách bộ nhớ của Safari và ứng dụng — nếu đã chơi trong Safari, hãy “Xuất file save” rồi “Nhập file save” trong ứng dụng.</span></div>` : ""}
-      </div>
-    </div>`, { noClose: true });
-  const begin = n => { slot = n; newState(); registerSignatures(); S.introDone = false; applySettings(); startMusic(); showIntro(); };
-  const cont = $("#t-continue"); if (cont) cont.onclick = () => { slot = ls; startMusic(); loadData(data); };
-  const nw = $("#t-new"); if (nw) nw.onclick = () => begin(1);
-  on(body, "[data-load]", "click", b => { slot = +b.dataset.load; startMusic(); loadData(readSlot(slot)); });
-  on(body, "[data-new]", "click", b => { const n = +b.dataset.new; if (readSlot(n) && !confirm(L`Xóa tiến trình ở ô ${n} và chơi lại từ đầu?`)) return; begin(n); });
-  $("#t-import").onclick = () => importSave();
-  body.insertAdjacentHTML("beforeend", langRow());
+  const body = openModal(L("⚙️ Cài đặt"), `${langRow()}
+    <div class="row" style="margin-top:10px">📱 ${L("Khi cầm máy dọc, game tự xoay ngang theo chiều:")}
+      <button class="btn ${rotDir() === "right" ? "teal" : "gray"}" data-rot="right">${L("↻ Sang phải")}</button><button class="btn ${rotDir() === "left" ? "teal" : "gray"}" data-rot="left">${L("↺ Sang trái")}</button></div>
+    <h3>💾 ${L("Ô lưu")}</h3>${slots}
+    <div class="row"><button class="btn gray" id="t-import">📥 ${L("Nhập file save")}</button><span class="sub">${L("Tiến trình được lưu tự động trên thiết bị này.")}</span></div>
+    <div class="row" style="margin-top:10px"><span class="sub">${L("Phiên bản")} ${APP_VERSION}</span><button class="btn gray" id="s-update">🔄 ${L("Kiểm tra cập nhật")}</button></div>`);
   on(body, "[data-lang]", "click", b => { if (b.dataset.lang !== LANG) setLang(b.dataset.lang); });
+  on(body, "[data-rot]", "click", b => { try { localStorage.setItem("chnu_rot", b.dataset.rot); } catch (e) {} fit(); titleSettings(); });
+  on(body, "[data-load]", "click", b => { titleStop(); slot = +b.dataset.load; startMusic(); STF.sig = ""; closeModal(); loadData(readSlot(slot)); });
+  on(body, "[data-del]", "click", b => {
+    const n = +b.dataset.del;
+    if (!confirm(L`Xóa vĩnh viễn tiến trình ở ô ${n}?`)) return;
+    try { localStorage.removeItem(SAVE_KEY(n)); } catch (e) {}
+    titleSettings(); showTitleKeepModal();
+  });
+  $("#t-import").onclick = () => importSave();
+  $("#s-update").onclick = () => checkUpdate(true);
+}
+// Vẽ lại nút Tiếp tục sau khi xóa ô lưu mà không đóng bảng cài đặt
+function showTitleKeepModal() {
+  const keepOpen = !$("#modal").classList.contains("hidden");
+  const old = Title.city; showTitle(); Title.city = old;
+  if (keepOpen) titleSettings();
 }
 function showIntro() {
   let i = 0;

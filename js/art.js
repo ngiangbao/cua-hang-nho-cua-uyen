@@ -344,7 +344,7 @@ const Art = (() => {
       <rect y="${294 + extra}" width="1000" height="10" fill="${t.trim}" opacity=".7"/>
       ${extra > 40 ? bunting(extra, acc) : ""}
       <g transform="translate(0 ${20 + extra})">
-      ${neon}
+      <g class="shop-sign">${neon}</g>
       <g clip-path="url(#win-clip)"><g transform="translate(${bx} ${by}) scale(${(bw / 300).toFixed(3)} ${(bh / 200).toFixed(3)})">${windowView(locId)}</g></g>
       ${W.frame}
       ${propsSvg(locId, t, prog)}
