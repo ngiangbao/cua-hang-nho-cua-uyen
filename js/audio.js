@@ -176,8 +176,8 @@ const Sound = (() => {
     else { tempo = P.tempo; key = P.key; style = P.style; }
   }
   function setStyle(locId) {
-    const L = LOCATIONS[locId]; if (!L) return;
-    locTempo = L.tempo; locKey = L.key; applyPreset();
+    const Lc = LOCATIONS[locId]; if (!Lc) return;
+    locTempo = Lc.tempo; locKey = Lc.key; applyPreset();
   }
   function setPreset(p) { preset = p; applyPreset(); beat = 0; }
   function setMusicVol(v) { musicVol = v; if (musicBus) musicBus.gain.value = v * 0.5; }

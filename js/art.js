@@ -295,7 +295,7 @@ const Art = (() => {
     }
     if (locId === "saigon") {
       g += [[230, 0], [600, 0], [960, 0]].map(([x]) => `<g><line x1="${x}" y1="0" x2="${x}" y2="20" stroke="#555"/><path d="M${x - 16},20 h32 l-6,18 h-20z" fill="#e76f51"/>${[0,1,2,3].map(k => `<path d="M${x - 10 + k * 7},36 q${k % 2 ? 6 : -6},20 0,${34 + k * 6}" stroke="#40916c" stroke-width="3" fill="none"/>`).join("")}</g>`).join("");
-      if (p >= 4) g += `<g transform="translate(214 120)"><rect width="80" height="88" rx="6" fill="#c8a27a" stroke="#7f5539" stroke-width="4"/>${[[8,8,"#ffd166"],[40,14,"#ffafcc"],[12,44,"#a8dadc"],[44,50,"#fff"]].map(([x,y,c]) => `<rect x="${x}" y="${y}" width="28" height="24" fill="${c}" transform="rotate(${x % 9 - 4} ${x} ${y})"/>`).join("")}<text x="40" y="104" text-anchor="middle" font-size="10" font-weight="700" fill="#264653">Góc trút buồn</text></g>`;
+      if (p >= 4) g += L`<g transform="translate(214 120)"><rect width="80" height="88" rx="6" fill="#c8a27a" stroke="#7f5539" stroke-width="4"/>${[[8,8,"#ffd166"],[40,14,"#ffafcc"],[12,44,"#a8dadc"],[44,50,"#fff"]].map(([x,y,c]) => `<rect x="${x}" y="${y}" width="28" height="24" fill="${c}" transform="rotate(${x % 9 - 4} ${x} ${y})"/>`).join("")}<text x="40" y="104" text-anchor="middle" font-size="10" font-weight="700" fill="#264653">Góc trút buồn</text></g>`;
       if (p >= 8) g += `<path d="M0,6 Q500,46 1000,6" stroke="#333" fill="none"/>${Array.from({ length: 16 }, (_, i) => `<circle cx="${30 + i * 62}" cy="${12 + Math.sin(i / 15 * Math.PI) * 22}" r="7" fill="#ffd166" class="bulb" style="animation-delay:${i * 0.2}s"/>`).join("")}`;
     }
     if (locId === "dalat") {
@@ -324,18 +324,18 @@ const Art = (() => {
     return g;
   }
   function sceneBg(locId, decor, extra = 0, shelf = [], prog = 0) {
-    const L = LOCATIONS[locId], t = THEMES[locId] || THEMES.hanoi;
-    const acc = L.accent, H = 570 + extra;
+    const Lc = LOCATIONS[locId], t = THEMES[locId] || THEMES.hanoi;
+    const acc = Lc.accent, H = 570 + extra;
     const plant = decor.cay_xanh ? `
       <g><rect x="40" y="250" width="44" height="40" rx="6" fill="#e07a5f"/><circle cx="62" cy="230" r="28" fill="#52b788"/><circle cx="44" cy="222" r="16" fill="#40916c"/><circle cx="80" cy="218" r="16" fill="#74c69d"/></g>
       <g><rect x="920" y="250" width="44" height="40" rx="6" fill="#f4a261"/><circle cx="942" cy="234" r="22" fill="#52b788"/><circle cx="930" cy="214" r="6" fill="#ff8fa3"/><circle cx="952" cy="208" r="6" fill="#ffd166"/></g>` : "";
-    const neon = decor.bien_neon ? `<text x="500" y="44" text-anchor="middle" class="neon" font-size="30" font-family="Baloo 2, cursive" font-weight="800" fill="#fff" stroke="${acc}" stroke-width="1.5">☕ Cửa hàng nhỏ của Uyên</text>` :
-      `<rect x="370" y="14" width="260" height="40" rx="10" fill="#fff8e7" stroke="${acc}" stroke-width="3"/><text x="500" y="42" text-anchor="middle" font-size="22" font-family="Baloo 2, cursive" font-weight="800" fill="${acc}">Cửa hàng nhỏ của Uyên</text>`;
+    const neon = decor.bien_neon ? L`<text x="500" y="44" text-anchor="middle" class="neon" font-size="30" font-family="Baloo 2, cursive" font-weight="800" fill="#fff" stroke="${acc}" stroke-width="1.5">☕ Cửa hàng nhỏ của Uyên</text>` :
+      L`<rect x="370" y="14" width="260" height="40" rx="10" fill="#fff8e7" stroke="${acc}" stroke-width="3"/><text x="500" y="42" text-anchor="middle" font-size="22" font-family="Baloo 2, cursive" font-weight="800" fill="${acc}">Cửa hàng nhỏ của Uyên</text>`;
     // Tranh tường treo dưới TV, loa jazz ở góc phải, máy lạnh trên cao — tránh kệ và cửa sổ
     const art = decor.tranh ? `<g><rect x="800" y="150" width="84" height="64" rx="6" fill="#fff" stroke="#9c6644" stroke-width="5"/><circle cx="824" cy="172" r="10" fill="#ffd166"/><path d="M806,208 l22,-22 l14,14 l14,-18 l20,26z" fill="${acc}"/></g>` : "";
     const ac = decor.may_lanh ? `<g><rect x="650" y="-14" width="110" height="30" rx="8" fill="#f8f9fa" stroke="#adb5bd" stroke-width="2"/><rect x="662" y="6" width="86" height="4" fill="#ced4da"/><circle cx="748" cy="-4" r="3" fill="#06d6a0"/></g>` : "";
     const speaker = decor.loa_jazz ? `<g><rect x="900" y="150" width="40" height="60" rx="6" fill="#343a40"/><circle cx="920" cy="170" r="10" fill="#6c757d"/><circle cx="920" cy="196" r="6" fill="#6c757d"/><text x="944" y="150" font-size="20" class="note">♪</text></g>` : "";
-    const menu = `<g><rect x="600" y="76" width="150" height="120" rx="8" fill="#2d3a3a" stroke="#9c6644" stroke-width="6"/><text x="675" y="100" text-anchor="middle" fill="#ffd166" font-size="16" font-family="Baloo 2" font-weight="700">THỰC ĐƠN</text>${[0,1,2,3,4].map(i => `<rect x="616" y="${112 + i * 15}" width="${60 + (i * 23) % 50}" height="5" rx="2" fill="#fff" opacity=".7"/><rect x="718" y="${112 + i * 15}" width="18" height="5" rx="2" fill="#ffd166" opacity=".8"/>`).join("")}</g>`;
+    const menu = L`<g><rect x="600" y="76" width="150" height="120" rx="8" fill="#2d3a3a" stroke="#9c6644" stroke-width="6"/><text x="675" y="100" text-anchor="middle" fill="#ffd166" font-size="16" font-family="Baloo 2" font-weight="700">THỰC ĐƠN</text>${[0,1,2,3,4].map(i => `<rect x="616" y="${112 + i * 15}" width="${60 + (i * 23) % 50}" height="5" rx="2" fill="#fff" opacity=".7"/><rect x="718" y="${112 + i * 15}" width="18" height="5" rx="2" fill="#ffd166" opacity=".8"/>`).join("")}</g>`;
     const W = windowShape(t), [bx, by, bw, bh] = W.box;
     return `<svg class="scene-bg" viewBox="0 0 1000 ${H}" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
       <defs><clipPath id="win-clip">${W.clip}</clipPath></defs>

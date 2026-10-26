@@ -133,14 +133,15 @@ body.rotated.rot-left #viewport { padding: 0 env(safe-area-inset-top) 0 max(env(
 #dock-btns button .dot { position: absolute; top: 6px; right: 10px; width: 14px; height: 14px; border-radius: 50%; background: var(--bad); border: 2px solid #fff; }
 #dock-info { flex: 1; background: #fff; border-radius: 18px; padding: 10px 14px; overflow: hidden; display: flex; flex-direction: column; }
 .info-title { font-weight: 800; font-size: 17px; color: var(--coral-d); }
-#goals { flex: 1; }
+/* Danh sách mục tiêu tự cuộn khi dài; dòng thống kê luôn nằm ở đáy khung */
+#goals { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-right: 4px; }
 .goal { display: flex; align-items: center; gap: 8px; font-size: 15px; padding: 3px 0; border-bottom: 1px dashed var(--line); }
 .goal .gbar { flex: none; width: 70px; height: 8px; background: #f1e3d3; border-radius: 4px; overflow: hidden; }
 .goal .gbar div { height: 100%; background: var(--sun); }
 .goal.done { color: var(--good); text-decoration: line-through; }
 .goal.done .gbar div { background: var(--good); }
 .goal .rw { margin-left: auto; color: var(--teal-d); font-weight: 700; white-space: nowrap; }
-#today-stats { font-size: 14px; color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; border-top: 2px solid var(--line); padding-top: 6px; }
+#today-stats { flex: none; font-size: 14px; color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; border-top: 2px solid var(--line); padding-top: 6px; }
 #today-stats b { color: var(--ink); }
 
 /* ===== Quầy pha chế ===== */
@@ -237,7 +238,7 @@ body.rotated.rot-left #viewport { padding: 0 env(safe-area-inset-top) 0 max(env(
 .stars .st.off { opacity: .22; }
 #hud .stars { color: #fff3b0; text-shadow: 0 1px 0 rgba(0,0,0,.2); }
 .qtybtns button { background: #fff1e6; border-radius: 8px; padding: 2px 8px; font-weight: 800; margin-left: 3px; box-shadow: 0 2px 0 var(--line); }
-.chart { width: 100%; height: 220px; background: #fff; border-radius: 14px; }
+.chart { width: 100%; height: auto; display: block; background: #fff; border-radius: 14px; }
 .intro-wrap { display: flex; gap: 24px; align-items: center; }
 .intro-wrap .portrait { width: 220px; height: 280px; flex: none; background: #ffe8d6; border-radius: 22px; overflow: hidden; display: flex; align-items: flex-end; justify-content: center; }
 .intro-wrap .portrait svg { width: 240px; height: 360px; margin-bottom: -80px; }
@@ -386,7 +387,7 @@ input[type=range] { accent-color: var(--coral); width: 220px; }
 /* ===== Bản đồ chi nhánh ===== */
 .branch-wrap { display: grid; grid-template-columns: 540px 1fr; gap: 18px; align-items: start; }
 .vn-map { width: 540px; height: 620px; filter: drop-shadow(0 6px 10px rgba(0,0,0,.12)); }
-.branch-side .chart { height: 170px; }
+.branch-side .chart { height: auto; }
 .pin { cursor: pointer; }
 .pin-dot { fill: #fff; stroke: #e07a5f; stroke-width: 3; }
 .pin-halo { fill: #e07a5f; opacity: .25; }
@@ -559,3 +560,7 @@ body.phone #guide .g-btn { font-size: 19px; }
 /* Thanh báo có bản cập nhật */
 #upd-bar { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 60; background: #fff8ec; border: 3px solid var(--teal, #2a9d8f);
   border-radius: 16px; padding: 10px 14px; display: flex; gap: 10px; align-items: center; font-size: 18px; font-weight: 700; box-shadow: 0 10px 30px rgba(0,0,0,.3); animation: fadeIn .3s; }
+
+/* Nhãn vẽ bằng CSS khi chơi tiếng Anh */
+html[lang="en"] #tv:after { content: "🎵 Change music"; }
+html[lang="en"] #menu-board:after { content: "👆 See menu"; }
