@@ -1,6 +1,6 @@
 // ===== Dữ liệu game "Cửa hàng nhỏ của Uyên" =====
 // Phiên bản hiện tại; nhớ đổi cùng version.json khi phát hành
-const APP_VERSION = "1.0.5";
+const APP_VERSION = "1.0.6";
 
 const HERO = "Bảo Uyên";
 
@@ -97,7 +97,7 @@ const EQUIPMENT = {
 
 // ---------- Trang trí (mỗi quán riêng) ----------
 const DECOR = {
-  ban_ghe:  { name: "Thêm bàn ghế",        price: 500000,  max: 3, desc: "+1 chỗ xếp hàng mỗi cấp" },
+  ban_ghe:  { name: "Thêm bàn ghế",        price: 500000,  max: 1, desc: "Đón tối đa 5 khách cùng lúc (thay vì 3)" },
   cay_xanh: { name: "Cây xanh & hoa",      price: 300000,  max: 1, desc: "+5% tiền tip" },
   loa_jazz: { name: "Loa nghe jazz",       price: 450000,  max: 1, desc: "Khách kiên nhẫn hơn 15%" },
   bien_neon:{ name: "Biển hiệu đèn neon",  price: 700000,  max: 1, desc: "+15% lượng khách" },

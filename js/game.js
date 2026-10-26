@@ -105,6 +105,8 @@ function migrate(st) {
   merged.cityStory = st.cityStory || {}; merged.shopPerk = st.shopPerk || {}; merged.playMs = st.playMs || {};
   if (!merged.repV2) { (merged.shops || []).forEach(sh => sh.rep = Math.min(100, sh.rep + 20)); merged.repV2 = true; }
   const oldTrait = { cham: "nhanh", duyen: "duyen", can: "taynghe", vui: "thanthien" };
+  // Bàn ghế giờ chỉ một cấp (3 → 5 chỗ)
+  (merged.shops || []).forEach(sh => { if (sh.decor && sh.decor.ban_ghe > 1) sh.decor.ban_ghe = 1; });
   (merged.shops || []).forEach(sh => Object.values(sh.staff).forEach(x => { if (x && !x.perks) { x.perks = [oldTrait[x.trait] || "nhanh"]; x.flaws = []; delete x.trait; } }));
   return merged;
 }
@@ -384,7 +386,9 @@ function lambda(i, t) {
 }
 // Chiến dịch đang có tác dụng ở quán i (tờ rơi chỉ ở quán đã phát)
 const adsFor = i => S.marketing.filter(m => MARKETING[m.id] && (m.scope === "all" || (m.shop != null ? m.shop : S.active) === i));
-function maxSlots() { return Math.min(6, 3 + (shop().decor.ban_ghe || 0)); }
+// Tối đa 3 khách cùng lúc, mua bàn ghế thì 5
+const seats = sh => sh.decor.ban_ghe ? 5 : 3;
+function maxSlots() { return seats(shop()); }
 
 function tickMinute() {
   R.time++;
@@ -411,7 +415,8 @@ function tickMinute() {
   for (const c of R.customers.slice()) {
     if (c.state === "order" || c.state === "drink") {
       c.pat -= 1; c.wait++;
-      if (c.pat <= 0) { leave(c, "angry"); continue; }
+      // Sau giờ đóng cửa khách ra về bình thường, không tính là bỏ đi
+      if (c.pat <= 0) { leave(c, R.time >= DAY_END ? "quiet" : "angry"); continue; }
       const wt = present(sh, "waiter");
       if (c.state === "order" && wt && !c.mood && !(R.waiterBusy > 0) && c.wait >= Math.max(1, (4 - wt.skill * 0.6) * (1 - effOf(wt, "speed"))) / prof(wt, sh)) {
         takeOrder(c);
@@ -512,7 +517,8 @@ function kolFilming(c) {
 }
 function spawnCustomer(critic) {
   const s = freeSlot();
-  if (s < 0) { R.today.shops[S.active].lost++; return; }
+  // Quán kín chỗ: khách chưa xuất hiện nên không tính là bỏ đi
+  if (s < 0) return;
   const sh = shop();
   let c;
   const regs = critic ? [] : availableRegulars();
@@ -1395,8 +1401,8 @@ function simTick(i) {
   const sim = R.sim[i] || (R.sim[i] = { q: 0, acc: 0, bAcc: 0 });
   if (R.time < DAY_END) {
     sim.acc += lambda(i, R.time);
-    while (sim.acc >= 1) { sim.acc--; if (sim.q < 3 + (sh.decor.ban_ghe || 0)) sim.q++; else T.lost++; }
-  } else if (R.time > DAY_END + 30) { T.lost += sim.q; sim.q = 0; }
+    while (sim.acc >= 1) { sim.acc--; if (sim.q < seats(sh)) sim.q++; }
+  } else if (R.time > DAY_END + 30) sim.q = 0; // đóng cửa: khách còn chờ ra về, không tính bỏ đi
   sim.bAcc = Math.min(1.5, sim.bAcc + 1 / baristaTime(b, sh) * (present(sh, "waiter") ? 1.1 : 1));
   while (sim.bAcc >= 1 && sim.q > 0) {
     sim.bAcc--; sim.q--;
