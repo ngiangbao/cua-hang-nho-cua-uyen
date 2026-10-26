@@ -1,5 +1,5 @@
 // Service worker: lưu đệm để game mở được cả khi không có mạng
-const CACHE = "chnu-v6";
+const CACHE = "chnu-v7";
 const ASSETS = ["./", "index.html", "css/style.css", "js/data.js", "js/stories.js", "js/art.js", "js/audio.js", "js/game.js",
   "manifest.webmanifest", "icons/apple-touch-icon.png", "icons/icon-192.png", "icons/icon-512.png"];
 
