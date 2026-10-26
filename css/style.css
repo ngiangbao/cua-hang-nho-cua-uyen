@@ -15,6 +15,7 @@
   --accent: #e07a5f;
 }
 * { box-sizing: border-box; touch-action: manipulation; }
+:root { color-scheme: only light; }
 html, body { margin: 0; height: 100%; background: #2d2424; overflow: hidden; overscroll-behavior: none; touch-action: manipulation; -webkit-text-size-adjust: 100%; }
 body { font-family: "Baloo 2", "Segoe UI", system-ui, sans-serif; color: var(--ink); -webkit-tap-highlight-color: transparent; user-select: none; }
 button { font-family: inherit; cursor: pointer; border: 0; color: inherit; }
@@ -564,3 +565,17 @@ body.phone #guide .g-btn { font-size: 19px; }
 /* Nhãn vẽ bằng CSS khi chơi tiếng Anh */
 html[lang="en"] #tv:after { content: "🎵 Change music"; }
 html[lang="en"] #menu-board:after { content: "👆 See menu"; }
+
+/* Thành tựu theo mốc */
+.card.achv .tiers { display: flex; gap: 6px; margin: 6px 0; flex-wrap: wrap; }
+.card.achv .tier { min-width: 30px; height: 30px; border-radius: 15px; display: inline-flex; align-items: center; justify-content: center; font-size: 14px; font-weight: 800; background: #f1e3d3; color: var(--muted); padding: 0 6px; }
+.card.achv .tier.reached { background: #ffd166; color: var(--ink); box-shadow: 0 0 0 2px #e9a23b inset; }
+.card.achv .tier.claimed { background: var(--teal); color: #fff; }
+.card.achv .achv-bar { width: 100%; height: 10px; background: #f1e3d3; border-radius: 5px; overflow: hidden; margin: 4px 0; }
+.card.achv .achv-bar div { height: 100%; background: var(--sun); }
+
+/* Ô máy móc: rộng cố định dù đã có hay chưa, nút xuống dòng và nằm ở đáy ô */
+.grid:has(> .eq-card) { grid-template-columns: repeat(auto-fill, 280px); justify-content: start; }
+.eq-card { width: 280px; min-width: 0; display: flex; flex-direction: column; }
+.eq-card > .row { margin-top: auto !important; padding-top: 8px; }
+.eq-card .btn, .eq-card .pill { white-space: normal; width: 100%; text-align: center; }

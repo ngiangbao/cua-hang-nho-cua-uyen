@@ -1,6 +1,6 @@
 // ===== Dữ liệu game "Cửa hàng nhỏ của Uyên" =====
 // Phiên bản hiện tại; nhớ đổi cùng version.json khi phát hành
-const APP_VERSION = "1.1.0";
+const APP_VERSION = "1.2.0";
 
 const HERO = L("Bảo Uyên");
 
@@ -867,23 +867,44 @@ const CHARACTERS = [
 ];
 
 // ---------- Thành tựu ----------
-const ACHIEVEMENTS = [
-  { id: "first",   name: L("Ly đầu tiên"),        desc: L("Phục vụ ly nước đầu tiên"),               test: s => s.totals.served >= 1 },
-  { id: "s100",    name: L("Tay pha quen việc"),  desc: L("Phục vụ 100 ly"),                          test: s => s.totals.served >= 100 },
-  { id: "s1000",   name: L("Nghìn ly yêu thương"), desc: L("Phục vụ 1.000 ly toàn chuỗi"),           test: s => s.totals.served >= 1000 },
-  { id: "p50",     name: L("Đôi tay vàng"),       desc: L("50 ly hoàn hảo"),                          test: s => s.totals.perfect >= 50 },
-  { id: "friend",  name: L("Người bạn thân"),     desc: L("Đạt 5 tim với một khách ruột"),            test: s => Object.values(s.chars).some(c => c.aff >= 100) },
-  { id: "meet10",  name: L("Quán của mọi người"), desc: L("Làm quen 10 khách ruột"),                  test: s => Object.values(s.chars).filter(c => c.met).length >= 10 },
-  { id: "staff",   name: L("Bà chủ thực thụ"),    desc: L("Thuê đủ 4 vị trí ở một quán"),             test: s => s.shops.some(sh => ROLE_ORDER.every(r => sh.staff[r])) },
-  { id: "shop2",   name: L("Chi nhánh thứ hai"),  desc: L("Mở quán thứ 2"),                            test: s => s.shops.length >= 2 },
-  { id: "shop4",   name: L("Chuỗi cà phê"),       desc: L("Mở 4 quán"),                                test: s => s.shops.length >= 4 },
-  { id: "shop6",   name: L("Từ Bắc vào Nam"),     desc: L("Có quán ở cả 6 thành phố"),                 test: s => s.shops.length >= 6 },
-  { id: "rich",    name: L("Triệu phú phin"),     desc: L("Có 50.000.000đ trong két"),                 test: s => s.money >= 50000000 },
-  { id: "secret",  name: L("Sổ tay bí mật"),      desc: L("Mở khóa 3 công thức bí mật"),               test: s => Object.keys(s.secrets).length >= 3 },
-  { id: "story",   name: L("Trang cuối của sổ tay"), desc: L("Hoàn thành cốt truyện 4 chương"),       test: s => !!(s.story && s.story.lastPage) },
-  { id: "storm",   name: L("Sau cơn bão"),       desc: L("Cùng khách ruột sửa quán sau đêm bão"),     test: s => !!(s.story && s.story.stormDone) },
-  { id: "rep5",    name: L("Năm sao"),            desc: L("Một quán đạt uy tín 90"),                   test: s => s.shops.some(sh => sh.rep >= 90) },
+// Thành tựu theo từng lớp: mỗi nhóm có nhiều mốc tăng dần, đạt mốc nào nhận quà mốc đó
+// (tiền, nguyên liệu ngẫu nhiên hoặc sao uy tín cho quán đang đứng — quà lớn dần theo mốc)
+const countOf = o => Object.keys(o || {}).length;
+const ACHV_TRACKS = [
+  { id: "cups",      icon: "☕", name: L("Ly bán ra"),               unit: L("ly"),       tiers: [1, 100, 1000, 10000, 100000], value: s => s.totals.served },
+  { id: "guests",    icon: "🧑‍🤝‍🧑", name: L("Lượt khách phục vụ"),  unit: L("lượt"),     tiers: [1, 100, 1000, 10000, 100000], value: s => s.totals.customers || 0 },
+  { id: "perfect",   icon: "🌟", name: L("Ly hoàn hảo"),             unit: L("ly"),       tiers: [1, 100, 1000, 10000, 100000], value: s => s.totals.perfect },
+  { id: "earned",    icon: "💵", name: L("Tổng thu"),                money: true,         tiers: [1000000, 10000000, 100000000, 1000000000], value: s => s.totals.earned },
+  { id: "till",      icon: "💰", name: L("Két tiền"),                money: true,         tiers: [10000000, 50000000, 200000000, 1000000000], value: s => s.money },
+  { id: "chats",     icon: "💬", name: L("Cuộc trò chuyện"),         unit: L("lần"),      tiers: [1, 10, 100, 1000], value: s => s.totals.chats },
+  { id: "moods",     icon: "🎧", name: L("Ly hợp tâm trạng"),        unit: L("ly"),       tiers: [1, 10, 50, 200], value: s => (s.story && s.story.moodMatches) || 0 },
+  { id: "days",      icon: "📅", name: L("Ngày mở quán"),            unit: L("ngày"),     tiers: [7, 30, 100, 365], value: s => s.day },
+  { id: "meet",      icon: "💞", name: L("Làm quen khách ruột"),     unit: L("người"),    tiers: [1, 5, 10, 20, 27], value: s => Object.values(s.chars).filter(c => c.met).length },
+  { id: "friends",   icon: "💖", name: L("Bạn thân 5 tim"),          unit: L("người"),    tiers: [1, 3, 10, 27], value: s => Object.values(s.chars).filter(c => c.aff >= 100).length },
+  { id: "stories",   icon: "📖", name: L("Câu chuyện đã lắng nghe"), unit: L("chuyện"),   tiers: [1, 10, 30, 81], value: s => Object.values(s.chars).reduce((a, c) => a + (c.story || 0), 0) },
+  { id: "items",     icon: "📚", name: L("Kỷ vật sưu tầm"),          unit: L("món"),      tiers: [1, 10, 20, 34], value: s => countOf(s.items) },
+  { id: "pages",     icon: "📄", name: L("Trang sổ tay khôi phục"),  unit: L("trang"),    tiers: [5, 8, 10], value: s => countOf(s.story && s.story.pages) },
+  { id: "secrets",   icon: "🔓", name: L("Công thức bí mật"),        unit: L("món"),      tiers: [1, 3], value: s => countOf(s.secrets) },
+  { id: "sigs",      icon: "🧪", name: L("Món signature"),           unit: L("món"),      tiers: [1, 3], value: s => (s.signatures || []).length },
+  { id: "shops",     icon: "🗺️", name: L("Chi nhánh"),               unit: L("quán"),     tiers: [2, 4, 6], value: s => s.shops.length },
+  { id: "rep",       icon: "⭐", name: L("Uy tín cao nhất"),          unit: L("điểm"),     tiers: [50, 100, 200, 500, 1000], value: s => Math.floor(Math.max(...s.shops.map(sh => sh.rep))) },
+  { id: "hires",     icon: "👥", name: L("Nhân viên đã tuyển"),      unit: L("người"),    tiers: [1, 4, 12, 24], value: s => s.totals.hires || 0 },
+  { id: "fullstaff", icon: "👔", name: L("Quán đủ 4 vị trí"),        unit: L("quán"),     tiers: [1, 3, 6], value: s => s.shops.filter(sh => ROLE_ORDER.every(r => sh.staff[r])).length },
+  { id: "ads",       icon: "📣", name: L("Chiến dịch quảng cáo"),    unit: L("lần"),      tiers: [1, 10, 50], value: s => s.totals.ads || 0 },
+  { id: "cities",    icon: "🏙️", name: L("Câu chuyện chi nhánh trọn vẹn"), unit: L("quán"), tiers: [1, 3, 6], value: s => Object.values(s.cityStory || {}).filter(c => c.done).length },
+  { id: "story",     icon: "🌸", name: L("Cốt truyện chính"),        unit: L("mốc"),      tiers: [1, 2], labels: [L("Sau cơn bão"), L("Trang cuối của sổ tay")], value: s => (s.story && s.story.stormDone ? 1 : 0) + (s.story && s.story.lastPage ? 1 : 0) },
 ];
+// Quà theo mốc: mốc càng cao quà càng lớn; loại quà xoay vòng giữa các nhóm cho đa dạng
+const ACHV_MONEY = [100000, 500000, 2000000, 8000000, 25000000, 60000000];
+const ACHV_ING = [10, 30, 60, 120, 200, 300];
+const ACHV_REP = [1, 3, 5, 8, 10, 12];
+function achvReward(t, i) {
+  const k = ACHV_TRACKS.indexOf(t), lvl = Math.min(5, i + Math.max(0, 5 - t.tiers.length));
+  const kind = ["ing", "money", "rep"][(k + i) % 3];
+  const rw = kind === "money" ? { money: ACHV_MONEY[lvl] } : kind === "ing" ? { ing: ACHV_ING[lvl] } : { rep: ACHV_REP[lvl] };
+  if (i === t.tiers.length - 1 && !rw.money) rw.money = ACHV_MONEY[lvl];   // mốc cuối luôn kèm tiền
+  return rw;
+}
 
 const INTRO = [
   { who: "ngoai", text: L("Uyên à, ngoại già rồi, tay không còn đủ vững để canh từng giọt phin nữa.") },
