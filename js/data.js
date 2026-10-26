@@ -1,6 +1,6 @@
 // ===== Dữ liệu game "Cửa hàng nhỏ của Uyên" =====
 // Phiên bản hiện tại; nhớ đổi cùng version.json khi phát hành
-const APP_VERSION = "1.2.0";
+const APP_VERSION = "1.2.1";
 
 const HERO = L("Bảo Uyên");
 

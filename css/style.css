@@ -574,8 +574,17 @@ html[lang="en"] #menu-board:after { content: "👆 See menu"; }
 .card.achv .achv-bar { width: 100%; height: 10px; background: #f1e3d3; border-radius: 5px; overflow: hidden; margin: 4px 0; }
 .card.achv .achv-bar div { height: 100%; background: var(--sun); }
 
-/* Ô máy móc: rộng cố định dù đã có hay chưa, nút xuống dòng và nằm ở đáy ô */
-.grid:has(> .eq-card) { grid-template-columns: repeat(auto-fill, 280px); justify-content: start; }
-.eq-card { width: 280px; min-width: 0; display: flex; flex-direction: column; }
+/* Ô trong lưới không nở theo chữ dài: các cột luôn bằng nhau */
+.grid > * { min-width: 0; }
+/* Ô máy móc: giãn đều như ô món, nút xuống dòng và nằm ở đáy ô */
+.eq-card { display: flex; flex-direction: column; }
+.grid:has(> .eq-card) { grid-auto-rows: 1fr; }
 .eq-card > .row { margin-top: auto !important; padding-top: 8px; }
 .eq-card .btn, .eq-card .pill { white-space: normal; width: 100%; text-align: center; }
+
+/* Sổ khách ruột: chia nhóm theo nơi gặp, ô rộng đều 3 cột */
+.reg-group { display: flex; align-items: baseline; gap: 10px; margin: 16px 0 8px; }
+.reg-group .sub { font-weight: 600; }
+.reg-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.reg-grid { grid-auto-rows: 1fr; }
+.reg-grid > .card { display: flex; flex-direction: column; min-height: 280px; }

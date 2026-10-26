@@ -2430,9 +2430,19 @@ const PANELS = {
         <div class="sub" style="margin-top:4px">${ch.bio}</div>
         <div style="margin-top:4px">${h >= 1 ? L("Thích: ") + ch.fav.map(f => `<span class="pill">${DRINKS[f].name}</span>`).join("") : L('<span class="sub">Thân hơn để biết món yêu thích</span>')}</div>
         <div class="sub">Câu chuyện: ${ch.story.map((s, k) => k < cs.story ? "📖" : "🔒").join(" ")} · Ghé ${cs.visits} lần</div></div>`;
-    }).join("");
+    });
     const met = Object.values(S.chars).filter(c => c.met).length;
-    openModal(L`💞 Sổ tay khách ruột (${met}/${CHARACTERS.length})`, L`<p class="sub">Trò chuyện và pha đúng món yêu thích để tăng tim. Đạt 1, 3, 5 tim sẽ mở khóa câu chuyện và quà (khách hiện 💖). Mở quán ở thành phố mới để gặp khách ruột mới!</p><div class="grid">${cards}</div>`, { panel: "album" });
+    // Chia nhóm: khách gặp ở mọi quán, rồi từng thành phố
+    const groups = ["global", ...Object.keys(LOCATIONS)].map(loc => {
+      const list = CHARACTERS.filter(ch => ch.loc === loc);
+      if (!list.length) return "";
+      const n = list.filter(ch => S.chars[ch.id] && S.chars[ch.id].met).length;
+      const opened = loc === "global" || S.shops.some(sh => sh.loc === loc);
+      const title = loc === "global" ? L("🌏 Mọi nơi") : `📍 ${LOCATIONS[loc].city}`;
+      return `<h3 class="reg-group">${title} <span class="sub">${n}/${list.length}${opened ? "" : " · " + L("🔒 Mở quán ở đây để gặp")}</span></h3>
+        <div class="grid reg-grid">${list.map(ch => cards[CHARACTERS.indexOf(ch)]).join("")}</div>`;
+    }).join("");
+    openModal(L`💞 Sổ tay khách ruột (${met}/${CHARACTERS.length})`, `<p class="sub">${L("Trò chuyện và pha đúng món yêu thích để tăng tim. Đạt 1, 3, 5 tim sẽ mở khóa câu chuyện và quà (khách hiện 💖). Mở quán ở thành phố mới để gặp khách ruột mới!")}</p>${groups}`, { panel: "album" });
   },
   report() { showReport(S.lastReport, false); },
   // Trên điện thoại: mục tiêu hôm nay và tiến độ câu chuyện gom vào một bảng
